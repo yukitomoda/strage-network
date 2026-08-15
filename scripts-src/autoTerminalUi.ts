@@ -12,11 +12,9 @@ import { WishlistLine } from "./state";
 import { CatalogEntry, scanCatalog } from "./storageScan";
 import {
   getAutoDeposit,
-  getNotifyOnComplete,
   getTerminalName,
   getWishlist,
   setAutoDeposit,
-  setNotifyOnComplete,
   setTerminalName,
   setWishlist,
 } from "./terminalSettings";
@@ -220,22 +218,17 @@ function setupWishlistTab(
   }
 }
 
-// 名前/通知は通常ターミナルの設定タブと同じ内容(デフォルト値だけが異なる)。
+// 名前は通常ターミナルの設定タブと同じ内容。自動発注/自動預け入れは人間の操作を介さず
+// 通知先プレイヤーという概念が無いため、完了通知の設定項目はここには無い。
 // 自動預け入れトグルは自動端末だけの項目。
 function setupSettingsTab(
   form: CustomForm,
   tabVisible: ObservableBoolean,
   dimension: Dimension,
   terminalLoc: Vector3,
-  initialNotifyOnComplete: boolean,
   initialName: string,
   initialAutoDeposit: boolean
 ): void {
-  const notifyOnComplete = new ObservableBoolean(initialNotifyOnComplete, { clientWritable: true });
-  notifyOnComplete.subscribe((value) => {
-    setNotifyOnComplete(dimension, terminalLoc, value);
-  });
-
   const name = new ObservableString(initialName, { clientWritable: true });
   name.subscribe((value) => {
     setTerminalName(dimension, terminalLoc, value);
@@ -249,10 +242,9 @@ function setupSettingsTab(
   form.label("このターミナルの設定です。", { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.textField("名前", name, {
-    description: "通知時に表示されます。",
+    description: "自動端末の識別用です。",
     visible: tabVisible,
   });
-  form.toggle("引き出し完了時に通知を表示する", notifyOnComplete, { visible: tabVisible });
   form.toggle("自動預け入れ", autoDeposit, {
     description: "余剰アイテムを自動で預け入れます。",
     visible: tabVisible,
@@ -302,7 +294,6 @@ export function showAutoTerminalUi(player: Player, block: Block): void {
     isSettingsTab,
     dimension,
     block.location,
-    getNotifyOnComplete(dimension, block.location),
     terminalName ?? "",
     getAutoDeposit(dimension, block.location)
   );
