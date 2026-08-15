@@ -40,12 +40,10 @@ function setupTab(
   form: CustomForm,
   tabVisible: ObservableBoolean,
   catalog: CatalogEntry[],
-  cartLabelPrefix: string,
   confirmLabel: string,
   onConfirm: (lines: CartLine[]) => void
 ): void {
   const cart: CartLine[] = [];
-  const cartLabel = new ObservableString(`${cartLabelPrefix}: (空)`);
   const searchText = new ObservableString("", { clientWritable: true });
   const quantity = new ObservableNumber(1, { clientWritable: true });
 
@@ -59,6 +57,18 @@ function setupTab(
   const hasNextPage = new ObservableBoolean(false);
   const pageLabel = new ObservableString("1 / 1 ページ");
 
+  // カートに入っている数量を「{カート数}/{在庫数} {品名}」の形で行ラベルに表示する
+  // (下部の合計カート表示は不要になったため廃止した)。
+  function cartQuantityFor(entry: CatalogEntry): number {
+    const line = cart.find((l) => l.itemTypeId === entry.key.typeId && (l.itemName ?? "") === (entry.key.name ?? ""));
+    return line?.requested ?? 0;
+  }
+
+  function rowMessage(entry: CatalogEntry): UIRawMessage {
+    const namePart: UIRawMessage = entry.key.name ? { text: entry.key.name } : { translate: entry.localizationKey };
+    return { rawtext: [{ text: `${cartQuantityFor(entry)}/${entry.total} ` }, namePart] };
+  }
+
   function refreshFilter(): void {
     const q = searchText.getData().trim().toLowerCase();
     const allMatches = catalog.filter((entry) => entry.label.toLowerCase().includes(q));
@@ -69,20 +79,12 @@ function setupTab(
     for (let i = 0; i < ROW_COUNT; i++) {
       const entry = filtered[i];
       rowVisible[i].setData(!!entry);
-      rowLabels[i].setData(entry ? catalogEntryMessage(entry) : { text: "" });
+      rowLabels[i].setData(entry ? rowMessage(entry) : { text: "" });
     }
 
     hasPrevPage.setData(currentPage > 0);
     hasNextPage.setData(currentPage < totalPages - 1);
     pageLabel.setData(`${currentPage + 1} / ${totalPages} ページ`);
-  }
-
-  function refreshCartLabel(): void {
-    cartLabel.setData(
-      cart.length === 0
-        ? `${cartLabelPrefix}: (空)`
-        : `${cartLabelPrefix}: ` + cart.map((l) => `${l.itemName ?? l.itemTypeId} x${l.requested}`).join(", ")
-    );
   }
 
   // visible は「タブが選択中」と「絞り込みに引っかかっている」の両方を満たす時だけ true にしたいが、
@@ -135,17 +137,17 @@ function setupTab(
           (l) => l.itemTypeId === entry.key.typeId && (l.itemName ?? "") === (entry.key.name ?? "")
         );
         if (existing) {
-          existing.requested += amount;
+          existing.requested = Math.min(existing.requested + amount, entry.total); // 在庫数を超えないようにする
         } else {
           cart.push({
             itemTypeId: entry.key.typeId,
             itemName: entry.key.name,
-            requested: amount,
+            requested: Math.min(amount, entry.total),
             delivered: 0,
             exhausted: false,
           });
         }
-        refreshCartLabel();
+        label.setData(rowMessage(entry)); // このスロットの表示だけカート数を反映して更新する
       },
       { visible: rowVisibleFlag }
     );
@@ -161,14 +163,12 @@ function setupTab(
   );
 
   form.divider({ visible: tabVisible });
-  form.label(cartLabel, { visible: tabVisible });
   form.button(
     confirmLabel,
     () => {
       if (cart.length === 0) return;
       onConfirm(cart.map((l) => ({ ...l })));
       cart.length = 0;
-      refreshCartLabel();
       form.close();
     },
     { visible: tabVisible }
@@ -306,7 +306,7 @@ export function showOrderUi(player: Player, block: Block): void {
     { label: "設定", value: 2 },
   ]);
 
-  setupTab(form, isOrderTab, orderCatalog, "カート", "注文確定", (lines) => {
+  setupTab(form, isOrderTab, orderCatalog, "注文確定", (lines) => {
     const orderId = submitOrder(network.id, block.location, player.name, lines);
     player.sendMessage(`§b${namePrefix}注文 #${orderId} をネットワークへ送信しました。`);
   });
