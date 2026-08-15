@@ -7,7 +7,7 @@ import {
   setDeposits,
 } from "./network";
 import { buildStorageIndex, insertIntoStorages } from "./storageScan";
-import { DepositLine, DepositRequest, generateId, NetworkData, PartialResultLine } from "./state";
+import { DepositLine, DepositRequest, generateId, locEquals, NetworkData, PartialResultLine } from "./state";
 import { getAttachedStorageLocation } from "./terminalBlock";
 
 // 注文(orderProcessing.ts)と対称だが、方向が逆(ターミナルの張り付いた先 -> ネットワーク内の
@@ -49,13 +49,19 @@ export function processNetworkDeposits(network: NetworkData): void {
       continue;
     }
 
-    const terminalBlock = dimension.getBlock(request.terminal);
-    if (!terminalBlock?.isValid || terminalBlock.typeId !== "wh:terminal") {
-      // ターミナルが失われている(壊された等): この納入リクエストは打ち切る(全ラインが不足として記録される)
+    // network.terminals(登録データ)を正とする。理由はorderProcessing.tsの同様の箇所を参照。
+    const stillRegistered = network.terminals.some((t) => locEquals(t, request.terminal));
+    if (!stillRegistered) {
       finalizeDeposit(network.id, request);
       requests = requests.slice(1);
       setDeposits(network.id, requests);
       continue;
+    }
+
+    const terminalBlock = dimension.getBlock(request.terminal);
+    if (!terminalBlock?.isValid || terminalBlock.typeId !== "wh:terminal") {
+      // 登録はあるが今はブロックを取得できない(チャンク未読み込み等)。次tickに再試行する。
+      break;
     }
 
     // 納入元はターミナルが張り付いている面(注文の搬入先と同じ場所)。毎回動的に見る。

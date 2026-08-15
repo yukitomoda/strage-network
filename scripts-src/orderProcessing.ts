@@ -1,7 +1,7 @@
 import { system, Vector3, world } from "@minecraft/server";
 import { appendPartial, getIssuing, getOrders, setIssuing, setOrders } from "./network";
 import { extractFromStorages } from "./storageScan";
-import { generateId, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
+import { generateId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
 import { getAttachedStorageLocation } from "./terminalBlock";
 
 // MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
@@ -36,13 +36,23 @@ export function processNetworkOrders(network: NetworkData): void {
       continue;
     }
 
-    const terminalBlock = dimension.getBlock(order.terminal);
-    if (!terminalBlock?.isValid || terminalBlock.typeId !== "wh:terminal") {
-      // ターミナルが失われている(壊された等): この注文は打ち切る(全ラインが不足として記録される)
+    // network.terminals(登録データ)を正とする。ここに無ければ本当に切断/破壊されたとみなす。
+    // 登録はあるのにブロックが今取得できない場合は、ワールド再読み込み直後などでその
+    // チャンクがまだ読み込まれていないだけの可能性があるため、打ち切らずに次tickへ持ち越す
+    // (実機で、これが原因で処理中の注文が誤って消えることを確認済み)。
+    const stillRegistered = network.terminals.some((t) => locEquals(t, order.terminal));
+    if (!stillRegistered) {
       finalizeOrder(network.id, order);
       orders = orders.slice(1);
       setOrders(network.id, orders);
       continue;
+    }
+
+    const terminalBlock = dimension.getBlock(order.terminal);
+    if (!terminalBlock?.isValid || terminalBlock.typeId !== "wh:terminal") {
+      // 登録はあるが、今はブロックを取得できない(チャンク未読み込み等)。今回はここで諦めて
+      // 次tickに再試行する(FIFOを守るため、後続の注文の処理には進まない)。
+      break;
     }
 
     // 搬入先はターミナルが張り付いている面(wh:facing)の先のブロック。毎回動的に見る。
