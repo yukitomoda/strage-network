@@ -53,14 +53,28 @@ function setupTab(
   const rowVisible: ObservableBoolean[] = [];
   let filtered: CatalogEntry[] = [];
 
+  // ページャー: 絞り込み結果がROW_COUNTを超える場合に前/次ページへ移動できるようにする。
+  let currentPage = 0;
+  const hasPrevPage = new ObservableBoolean(false);
+  const hasNextPage = new ObservableBoolean(false);
+  const pageLabel = new ObservableString("1 / 1 ページ");
+
   function refreshFilter(): void {
     const q = searchText.getData().trim().toLowerCase();
-    filtered = catalog.filter((entry) => entry.label.toLowerCase().includes(q)).slice(0, ROW_COUNT);
+    const allMatches = catalog.filter((entry) => entry.label.toLowerCase().includes(q));
+    const totalPages = Math.max(1, Math.ceil(allMatches.length / ROW_COUNT));
+    currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
+
+    filtered = allMatches.slice(currentPage * ROW_COUNT, (currentPage + 1) * ROW_COUNT);
     for (let i = 0; i < ROW_COUNT; i++) {
       const entry = filtered[i];
       rowVisible[i].setData(!!entry);
       rowLabels[i].setData(entry ? catalogEntryMessage(entry) : { text: "" });
     }
+
+    hasPrevPage.setData(currentPage > 0);
+    hasNextPage.setData(currentPage < totalPages - 1);
+    pageLabel.setData(`${currentPage + 1} / ${totalPages} ページ`);
   }
 
   function refreshCartLabel(): void {
@@ -79,7 +93,25 @@ function setupTab(
 
   form.textField("検索", searchText, { visible: tabVisible });
   form.slider("数量", quantity, 1, 64, { step: 1, visible: tabVisible });
-  form.divider({ visible: tabVisible });
+
+  // タブ非表示中はページャーボタンも隠す(rowVisibleFlagと同じ、AND合成が無いための対処)。
+  tabVisible.subscribe((active) => {
+    if (!active) {
+      hasPrevPage.setData(false);
+      hasNextPage.setData(false);
+    }
+  });
+
+  form.label(pageLabel, { visible: tabVisible });
+
+  form.button(
+    "▲ 前のページ",
+    () => {
+      currentPage--;
+      refreshFilter();
+    },
+    { visible: hasPrevPage }
+  );
 
   for (let i = 0; i < ROW_COUNT; i++) {
     const label = new ObservableUIRawMessage({ text: "" });
@@ -119,6 +151,15 @@ function setupTab(
     );
   }
 
+  form.button(
+    "▼ 次のページ",
+    () => {
+      currentPage++;
+      refreshFilter();
+    },
+    { visible: hasNextPage }
+  );
+
   form.divider({ visible: tabVisible });
   form.label(cartLabel, { visible: tabVisible });
   form.button(
@@ -134,6 +175,7 @@ function setupTab(
   );
 
   searchText.subscribe(() => {
+    currentPage = 0; // 新しい検索条件では1ページ目から見せる
     if (tabVisible.getData()) refreshFilter();
   });
   if (tabVisible.getData()) refreshFilter();
@@ -248,17 +290,21 @@ export function showOrderUi(player: Player, block: Block): void {
   const isDepositTab = new ObservableBoolean(false);
   const isSettingsTab = new ObservableBoolean(false);
 
-  function selectTab(tab: "order" | "deposit" | "settings"): void {
-    isOrderTab.setData(tab === "order");
-    isDepositTab.setData(tab === "deposit");
-    isSettingsTab.setData(tab === "settings");
-  }
+  // タブ切り替えはボタンではなくドロップダウンで行う。選択値(0=注文/1=納入/2=設定)の
+  // 変化を購読して、各タブのvisible/disabled用Observableに反映する。
+  const tabSelection = new ObservableNumber(0, { clientWritable: true });
+  tabSelection.subscribe((index) => {
+    isOrderTab.setData(index === 0);
+    isDepositTab.setData(index === 1);
+    isSettingsTab.setData(index === 2);
+  });
 
   const form = new CustomForm(player, terminalName ? `倉庫端末: ${terminalName}` : "倉庫端末");
-  form.button("注文", () => selectTab("order"), { disabled: isOrderTab });
-  form.button("納入", () => selectTab("deposit"), { disabled: isDepositTab });
-  form.button("設定", () => selectTab("settings"), { disabled: isSettingsTab });
-  form.divider();
+  form.dropdown("", tabSelection, [
+    { label: "注文", value: 0 },
+    { label: "納入", value: 1 },
+    { label: "設定", value: 2 },
+  ]);
 
   setupTab(form, isOrderTab, orderCatalog, "カート", "注文確定", (lines) => {
     const orderId = submitOrder(network.id, block.location, player.name, lines);
