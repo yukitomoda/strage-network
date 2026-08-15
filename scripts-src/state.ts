@@ -79,7 +79,7 @@ export function generateId(): string {
 // 注文の表示用ID。マルチプレイでプレイヤーが自分の注文をチャット上で見分けられればよく、
 // 厳密な一意性は不要なので、短い英数字4桁にしている(36^4 ≈ 168万通り)。
 export function generateOrderId(): string {
-  return `PUL-${Math.floor(Math.random() * 36 ** 4)
+  return `TAK-${Math.floor(Math.random() * 36 ** 4)
     .toString(36)
     .toUpperCase()
     .padStart(4, "0")}`;
