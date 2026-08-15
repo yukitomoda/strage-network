@@ -30,21 +30,22 @@ export const wrenchItemComponent: ItemCustomComponent = {
     const dimension = block.dimension;
 
     if (block.typeId === "wh:controller") {
-      if (player.isSneaking) {
-        if (getEditingNetworkId(player) !== undefined) {
-          setEditingNetworkId(player, undefined);
-          player.sendMessage("§e倉庫ネットワーク構築モードを終了しました。");
-        }
-        return;
-      }
-
       const network = findNetworkByController(dimension.id, block.location);
       if (!network) {
         player.sendMessage("§cこのコントローラのネットワーク情報が見つかりません。");
         return;
       }
+
+      // 同じネットワークを編集中に右クリック -> 終了。それ以外(未編集/別ネットワーク編集中)は
+      // このネットワークの編集を開始(切り替え)する。Shiftの有無は問わないトグル動作にする。
+      if (getEditingNetworkId(player) === network.id) {
+        setEditingNetworkId(player, undefined);
+        player.sendMessage("§e倉庫ネットワーク構築モードを終了しました。");
+        return;
+      }
+
       setEditingNetworkId(player, network.id);
-      player.sendMessage("§b倉庫ネットワーク構築モードを開始しました。ストレージ/ターミナルを右クリックして接続してください。");
+      player.sendMessage("§b倉庫ネットワーク構築モードを開始しました。ストレージ/ターミナルをShiftキーを押しながら右クリックして接続/切断してください。再度コントローラを右クリックすると、構築モードを終了します。");
       return;
     }
 
