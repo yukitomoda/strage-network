@@ -1,0 +1,22 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:wrench",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_wrench",
+      "minecraft:display_name": {
+        "value": "item.wh:wrench"
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:hand_equipped": true,
+      "minecraft:custom_components": [
+        "wh:wrench"
+      ]
+    }
+  }
+}

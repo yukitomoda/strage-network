@@ -1,0 +1,25 @@
+[tools]
+node = "24"
+
+[env]
+MC_COM_MOJANG = "{{env.APPDATA}}/Minecraft Bedrock/Users/Shared/games/com.mojang"
+MC_BP_NAME = "ExampleAddonBP"
+MC_RP_NAME = "ExampleAddonRP"
+
+[tasks.build]
+description = "スクリプトをビルドし、プレースホルダーアイコンを生成する"
+run = "npm run build"
+
+[tasks.install]
+description = "ビルドしてから BP/RP を Minecraft の development_*_packs にリンクする"
+depends = ["build"]
+run = "node tools/install.mjs"
+
+[tasks."install:copy"]
+description = "リンクではなくコピーで配置する(シンボリックリンク/ジャンクションが使えない場合)"
+depends = ["build"]
+run = "node tools/install.mjs --copy"
+
+[tasks.uninstall]
+description = "配置した BP/RP を development_*_packs から取り除く"
+run = "node tools/install.mjs --remove"

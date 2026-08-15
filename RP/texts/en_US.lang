@@ -1,0 +1,6 @@
+tile.wh:controller.name=Warehouse Controller
+tile.wh:terminal.name=Warehouse Terminal
+item.wh:wrench=Warehouse Wrench
+item.wh:test_filler=[Test] Random Filler
+pack.name=Warehouse Addon - Resource Pack
+pack.description=A storage network addon for personal use

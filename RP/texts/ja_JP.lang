@@ -1,0 +1,6 @@
+tile.wh:controller.name=倉庫コントローラ
+tile.wh:terminal.name=倉庫ターミナル
+item.wh:wrench=倉庫レンチ
+item.wh:test_filler=[テスト用] ランダム充填ツール
+pack.name=倉庫アドオン - リソースパック
+pack.description=個人利用向けの倉庫(ストレージネットワーク)アドオン

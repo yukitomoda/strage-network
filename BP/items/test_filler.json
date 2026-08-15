@@ -1,0 +1,22 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:test_filler",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_wrench",
+      "minecraft:display_name": {
+        "value": "item.wh:test_filler"
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:hand_equipped": true,
+      "minecraft:custom_components": [
+        "wh:test_filler"
+      ]
+    }
+  }
+}

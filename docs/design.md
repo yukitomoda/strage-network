@@ -1,0 +1,263 @@
+# 倉庫アドオン 設計ドキュメント
+
+Bedrock版Minecraft向けの倉庫（ストレージネットワーク）アドオン。個人利用のため、バージョン互換性やクラフトバランスは考慮しない。UXのためなら将来のアップデートで壊れうる手法（JSON UIのバニラ画面上書きなど）も許容する。Scripting API (`@minecraft/server` / `@minecraft/server-ui`) を使用し、実験的機能も許容する。
+
+## 1. 概要
+
+「コントローラ」「ターミナル」「接続ツール（レンチ）」の3つを導入する。
+
+- **コントローラ**: 倉庫ネットワークにつき1つ。ネットワークの注文処理を実行する。
+- **ターミナル**: 倉庫ネットワークへの注文UIを開くブロック。自身は状態を持たず、注文されたアイテムは真下に置いたストレージへ直接搬入される。1ネットワークに複数接続可能。詳細は6章参照。
+- **ストレージ**: アイテムの実体を保管する場所。**専用ブロックは作らず、`minecraft:inventory`を持つバニラのコンテナブロック（チェスト・樽・シュルカーボックス等）をそのまま使う**。
+- **接続ツール（レンチ）**: コントローラ・ストレージ・ターミナルをネットワークに接続/切断するためのアイテム。将来的には汎用設定ツールに拡張予定だが、MVPではネットワーク構築専用。
+
+1ワールド内に複数の独立したネットワーク（＝複数のコントローラ）を同時に存在させられる。ネットワークの接続範囲は**同一ディメンション内に限定**する。
+
+## 2. データモデルと永続化
+
+Bedrock Scripting APIでは、ブロック単位の永続データを直接持てない（動的プロパティが使えるのは `World` / `Entity` / `ItemStack` のみ）。そのため、ネットワークの構造情報はすべて `world` の動的プロパティにJSON文字列として保存する。個人利用規模なので、一覧の線形走査で十分と判断し、逆引きインデックスは作らない。
+
+```ts
+// wh:network_ids -> string[]  (存在するネットワークIDの一覧)
+
+// wh:network:<id> -> JSON
+type NetworkData = {
+  id: string;
+  dimensionId: string;           // 同一ディメンション限定
+  controller: Vector3;
+  storages: Vector3[];
+  terminals: Vector3[];
+};
+
+// wh:orders:<networkId> -> JSON (注文キュー, FIFO)
+type OrderLine = {
+  itemTypeId: string;
+  itemName?: string;   // nameTag(銘)がある場合のみ。詳細は5章参照
+  requested: number;
+  delivered: number;   // これまでに実際に届けた数
+  exhausted: boolean;  // 在庫不足/搬入先(ターミナル真下)が満杯等で「これ以上は無理」と確定した
+};
+type Order = {
+  id: string;
+  terminal: Vector3;
+  lines: OrderLine[];
+};
+
+// wh:issuing:<networkId> -> JSON (ターミナルからの発行待ちリスト。4章参照)
+type IssuingEntry = {
+  order: Order;          // lines は delivered=0, exhausted=false で初期化済み
+  readyAtTick: number;   // 発行操作時の system.currentTick + getIssueDelay(terminal)
+};
+
+// wh:partial:<networkId> -> JSON (部分成功/失敗の退避リスト)
+type PartialResult = {
+  orderId: string;
+  terminal: Vector3;
+  shortfall: { itemTypeId: string; itemName?: string; amount: number }[];
+};
+```
+
+### ネットワークのライフサイクル
+
+- コントローラブロックが設置された瞬間（`onPlace`相当）に新しいネットワークが自動生成され、自身が`controller`として登録される。
+- コントローラが破壊されたら、ネットワークごと解体する（`storages`/`terminals`/`orders`/`issuing`/`partial`もすべて削除）。
+- ストレージ・ターミナルが破壊された場合（`world.afterEvents.playerBreakBlock`）、破壊位置がいずれかのネットワークの`storages`/`terminals`と一致すればそのエントリを除去する。
+
+## 3. 接続ツール（レンチ）
+
+- カスタムアイテムコンポーネントの `onUseOn` でブロック右クリックを検知する。
+- プレイヤーの「現在編集中のネットワークID」は `player.setDynamicProperty("wh:editing_network", id)` で保持する（EntityはDynamic Property使用可）。
+- コントローラを右クリック → 編集モード開始（既に別ネットワークを編集中なら、そのネットワークに切り替える）。
+- 編集モード中、ストレージ/ターミナルを右クリック → 接続済みなら切断、未接続なら接続。
+- 編集モード中にコントローラをShift+右クリック → 編集モード終了（`wh:editing_network` を削除）。
+- **強調表示（MVP）**: `system.runInterval`で、`wh:editing_network`を持つプレイヤーがいれば、そのネットワークの`controller`/`storages`/`terminals`の座標にパーティクルを定期的にスポーンするだけの簡易実装。既知の課題として、パーティクル自体の寿命(1〜2秒)により切断直後も一瞬残る。修正案（自作の短寿命パーティクル、または`@minecraft/debug-utilities`の`DebugBox`）は10章参照。
+
+### 二連チェストの二重登録防止（実装・実機で発見された不具合の修正済み）
+
+バニラの二連チェストは隣接する2つの独立したブロックだが、中身(コンテナ)は実質1つを共有している。両方を別々にストレージとして登録すると、カタログスキャンや抽出処理で同じ中身を二重にカウントしてしまう。これを接続時に検知して防止する。
+
+判定方法は何段階か失敗を経て以下に落ち着いた。
+
+1. **(誤り)隣接する同種ブロックの有無で判定** → 連結していない単体チェスト同士が偶然隣接しているだけでも誤検知した。
+2. **(誤り)コンテナのスロット数(27超か)で判定** → `[A1 A2 B1 B2]`のように、別々の二連チェストが隣接して並んでいる場合、A2とB1はどちらも54スロットで隣接しているが実際には中身を共有していない、という偽陽性を防げなかった。
+3. **(採用)実際に中身を共有しているかを直接確認する**: 対象コンテナのスロット0の中身を退避し、一意な`nameTag`を持つ目印アイテムを一時的に置いて、隣接コンテナ側から同じ目印が見えるか確認し、確認後は必ず元の中身に戻す。同期的に完結するため見た目には一切影響しない。
+
+検討した代替案（ブロック状態から直接読み取る、コンテナオブジェクトの参照同一性`===`を使う）はどちらも採用しなかった。前者はBedrockのチェストに連結情報を持つブロック状態が存在しない（Java版の`type: left/right/single`に相当するものがない）ため不可能。後者は挙動が非公開でドキュメントに保証がなく、他の未検証の思い込みで既に2回つまずいた反省から避けた。
+
+この判定は「レンチで未接続のコンテナを接続しようとした瞬間」にのみ呼ばれる。定期実行のループ（強調表示・コントローラのtick処理）では一切呼ばれない。
+
+```ts
+function containersShareStorage(a: Container, b: Container): boolean {
+  if (a.size !== b.size || a.size === 0) return false;
+  const probeSlot = 0;
+  const original = a.getItem(probeSlot);
+
+  const marker = new ItemStack("minecraft:stick", 1);
+  marker.nameTag = `wh:probe:${Date.now()}:${Math.random()}`;
+  a.setItem(probeSlot, marker);
+
+  let shared = false;
+  for (let i = 0; i < b.size; i++) {
+    if (b.getItem(i)?.nameTag === marker.nameTag) { shared = true; break; }
+  }
+  a.setItem(probeSlot, original); // 必ず元に戻す
+  return shared;
+}
+```
+
+## 4. コントローラのtick処理
+
+`system.runInterval`（20tick=1秒間隔）によるグローバルなポーリングで実装する。ブロック自体はティックを持たず、受動的なデータ構造として存在する。
+
+### スループット制（グレード拡張性のため）
+
+「注文を一括即時処理」ではなく、**コントローラのグレードに応じた1tickあたりの搬送予算(budget)** を消費しながらキューを進める設計にする。これにより、将来「グレードの高いコントローラほど速い」という演出が、フェイクの待ち時間ではなく実際のスループットとして自然に実現できる。MVPでは`throughputPerTick`を十分大きい固定値にすることで、実質的に即時処理と変わらない挙動になる。
+
+```
+runInterval(20 ticks) {
+  for (network of allNetworks) {
+    moveReadyIssuingEntriesIntoQueue(network); // wh:issuing -> wh:orders
+
+    let budget = getThroughput(network.controller.tier); // MVP: 十分大きい固定値
+
+    while (budget > 0 && queue(network) not empty) {
+      const order = queue(network).front();
+      const line = order.lines.find(l => !l.exhausted && l.delivered < l.requested);
+
+      if (!line) {
+        finalizeOrder(order); // shortfallがあれば wh:partial:<id> に記録し、キューから除去
+        continue;
+      }
+
+      const attempt = min(line.requested - line.delivered, budget);
+      const extracted = extractFromStorages(network, line, attempt, terminalContainer);
+      // extractFromStorages はストレージからの抜き取りとターミナルへの格納を
+      // 同一関数内でアトミックに行う。「宙に浮いた」アイテムは発生しない。
+      line.delivered += extracted;
+      budget -= extracted;
+
+      // extracted < attempt は「予算不足」ではなく「真の在庫 or 受け皿不足」を意味する
+      // (attempt自体が budget で既に絞られているため)
+      if (extracted < attempt) line.exhausted = true;
+
+      persistQueue(network); // ← ラインを1つ処理するたびに書き戻す(後述)
+      if (budget <= 0) break; // 続きは次tickへ持ち越し
+    }
+  }
+}
+```
+
+**搬入先（ターミナル真下のストレージ）が満杯で格納できない場合も、ストレージ側の在庫不足と同じ「不足」として扱う**（`exhausted = true`）。搬入先に有効なコンテナが無い場合（真下に何も無い、コンテナでない等）も同様に、全ラインを不足として`wh:partial`に記録した上で注文を打ち切る。
+
+### 永続化の粒度: ラインごとに書き戻す
+
+ウォッチドッグ（実行時間が長すぎるスクリプトを強制中断する仕組み）が処理途中で発火しても、「実際にアイテムが移動した分は必ず`delivered`にも反映済み」という不変条件を保つため、**ラインを1つ処理するたびに`world.setDynamicProperty`で書き戻す**。個人利用規模なら書き戻し回数が増えてもパフォーマンス上の問題にはならない。
+
+これにより、ゲームを閉じる/クラッシュするタイミングがどこであっても、再読み込み後は`wh:orders:<networkId>`に残っている注文がそのまま「続きから」処理再開される。特別な復旧処理は不要。ターミナル・ストレージのコンテナ内容自体は、通常のチェストと同じくMinecraft標準のブロック永続化に乗っかるだけでよい。
+
+### ターミナルの発行遅延（グレード拡張性のため）
+
+「注文確定」を押した瞬間に本キューへ積むのではなく、いったん`wh:issuing:<networkId>`に積み、ターミナルのグレードに応じた遅延(`getIssueDelay(tier)`、MVPでは0)の後に本キューへ移す。`system.runTimeout`ではなく上記の同じポーリングループに乗せることで、ワールド再読み込みをまたいでも状態が失われない。
+
+### グレード管理
+
+`wh:controller` / `wh:terminal` に整数のブロックステート `wh:tier`（デフォルト0）を持たせ、`getThroughput(tier)` / `getIssueDelay(tier)` というテーブル参照関数を1箇所に用意する。MVPでは事実上「tier0だけ・スループットは十分大きい定数・発行遅延0」。将来グレードを増やす際もテーブルに行を足すだけで済む。ブロックIDを増やすのではなく同一ブロックのステートにすることで、将来のアップグレード機構（レンチや専用アイテムでの格上げ等）も実装しやすくする。
+
+### 納入（格納）: 注文と対称な逆方向の処理
+
+注文（ネットワークのストレージ → ターミナルの張り付いた先）と対称な、逆方向の処理を追加した。ターミナルの張り付いた先のコンテナに入っているアイテムを、ネットワーク内のストレージ群へ配って格納する。
+
+- データモデル・処理モデルは`Order`/`OrderLine`と完全に対称（`DepositRequest`/`DepositLine`、`wh:deposits:<networkId>`、`wh:deposit_issuing:<networkId>`、`wh:deposit_partial:<networkId>`）。
+- ただし**別系統として実装**し、スループット・発行遅延の定数（`DEPOSIT_THROUGHPUT_PER_TICK`等）を注文側とは独立して調整できるようにした。処理自体は同じ`system.runInterval`ループの中で、注文の処理に続けて呼び出す（`networkProcessing.ts`が両方を束ねる）。
+- `DepositRequest`/`DepositLine`自体は注文と同様「何を何個」を持てる形にしてあるが、MVPのUIでは検索・カート選択はさせず、**張り付いた先のコンテナに今入っている物を全部まとめて1回のリクエストにするワンボタン**にした（実用上、細かい数量指定のニーズがほぼ無いため）。将来UIを変えたくなってもデータ構造の変更は不要。
+- 搬入先(=ネットワーク内のどのストレージに入るか)は、`network.storages`を順番に試し、入りきらない分は次のストレージへ回す（1つのストレージで満杯なら次へ、を全て試して入らなければ「不足」として`wh:deposit_partial`に記録）。
+- **既にその品目を持っているストレージへの優先スタッキング**: 素朴に品目ごとに全ストレージを毎回スキャンすると、大規模なネットワーク(例: ラージチェスト30個=1620スロット)で品目数に比例して重くなりすぎる(最悪、1回の納入で数万スロット読み取りになり得る)。そのため「どのストレージに何があるか」の索引(`buildStorageIndex`)を**ネットワークごとに1tickにつき1回だけ**作り、そのtick内の全ラインの処理で使い回す。索引はtick開始時点のスナップショットなので、同じtick内で新しく届いた品目までは優先先として反映されないが、次のtickには自然に反映されるため実用上問題ないと判断した。ラージチェスト30個規模で実機検証済み、体感できるパフォーマンス問題は無かった。
+
+## 5. アイテム同一性の判定
+
+**原則: 「検索UIの表示で判別できない属性は区別しない」。** 比較関数は表示ロジックから導出する一枚岩の関数にし、カタログのグルーピングにも注文の抽出マッチングにも同じ関数を使う。表示と区別の基準がズレることを構造的に防ぐ。
+
+### MVPでの最低限表示
+
+- 標準表示名（`{translate: itemStack.localizationKey}` というRawMessageでクライアント側のlang解決に任せる。自前の翻訳テーブルは持たない）
+- カスタム名（銘、`nameTag`）がある場合はそちらを優先表示
+- 在庫数
+
+耐久値・エンチャント・lore・旗の模様・本の中身・地図IDなどは**表示しない＝区別しない**（将来、表示要素を追加したらその都度、比較関数にも同じ属性を追加する）。
+
+### 比較関数
+
+```ts
+function displayKey(stack: ItemStack): { typeId: string; name?: string } {
+  return { typeId: stack.typeId, name: stack.nameTag };
+}
+```
+
+`typeId`と`nameTag`はどちらも単純な文字列なので、そのままJSON化して`OrderLine`に埋め込める。これにより、複雑な属性をtickをまたいで正確に覚えておくための特別な仕組み（非表示エンティティによる「見本帳」など）は不要と判断し、設計から除外した。将来、表示に出ない複雑な属性（本の中身、地図IDなど）で区別したいという要件が生まれた場合の拡張手段として、アイデアの記録だけ残しておく（8章）。
+
+## 6. ターミナルの実体（設計変更: 非表示バッファエンティティ方式から「真下のストレージへ直接搬入」方式へ）
+
+当初は、ターミナル自身に9スロットの受け取りバッファを持たせる設計だった。しかし**ブロックには汎用の`minecraft:inventory`コンポーネントが存在しない**（チェスト等のコンテナ機能はエンジンにハードコードされた特別扱いで、データ駆動のカスタムブロック定義に後付けできない。実機検証でも`BP/blocks/*.json`に`minecraft:inventory`を書くと`child 'minecraft:inventory' not valid here`エラーでブロック定義自体がロードされないことを確認済み）ため、非表示・非当たり判定の専用エンティティ（`minecraft:inventory`コンポーネント持ち）をターミナルに紐づけて代用する方式を実装し、スポーン/検索/読み書き/永続化/ブロック破壊時のドロップ/無敵化/意図しない死亡時の自己修復まで**すべて実機検証で正しく動作することを確認していた**（検証内容は本章末尾に記録として残す）。
+
+その後、「ターミナルは右クリックで注文UIを開くだけにし、注文されたアイテムはターミナルの真下に置いたストレージへ直接届ける」という方針に変更した。この方式には次の利点がある。
+
+- **非表示エンティティの仕組みが丸ごと不要になる**。搬入先が実在するバニラコンテナになるため、不可視化・無当たり判定・無敵化・自己修復といった対策そのものが要らない（実在のチェストは元々永続化もブロック破壊時のドロップもエンジンが自然に処理する）。
+- **引き出し専用UIも不要になる**。プレイヤーは真下のチェストを普通に右クリックして開けばよく、バニラのドラッグ&ドロップ操作がそのまま使える。
+- ターミナルブロック自身は状態を持たない、純粋な「UIの入口」になる。
+
+### 搬入先の解決方法
+
+`Order.terminal`(ターミナルの座標)から、処理のたびに動的に`{ x, y: y - 1, z }`のブロックを取得し、その`minecraft:inventory`コンポーネントを搬入先として使う。ネットワークへのレンチ接続は不要（ストレージ一覧＝供給元、ターミナル真下＝そのターミナル専用の納品先、という役割分担）。真下にコンテナが無い、または満杯で入らない場合は、既存の「不足」の仕組み（`wh:partial`への記録）にそのまま乗せる。
+
+### (参考記録) 非表示バッファエンティティ方式で実機検証していた内容
+
+現在は不採用だが、得られた知見は将来また同様の課題（ブロックにカスタムの状態を持たせたい）に直面した際の参考として残す。
+
+- ブロックには`minecraft:inventory`が使えないが、**エンティティには正式に存在する**（`container_type`, `inventory_size`等を指定可能。`container_type: "container"`は自動UIオープンなし＝完全にスクリプト制御下）。`entity.getComponent("inventory").container`で`getItem`/`setItem`/`addItem`が使える。
+- `minecraft:custom_components`を持つカスタムブロックの`onPlayerInteract`は、通常右クリック/Shift+右クリックの両方で確実に発火し、`event.player.isSneaking`で正しく判別できる（実機確認済み）。
+- `dimension.spawnEntity()`でのエンティティ生成、`dimension.getEntities({ type, location, maxDistance })`での再取得、`addItem`/`getItem`の読み書き・スタッキング、ワールド再読み込みをまたいだ永続化を実機確認済み。
+- ブロック破壊時は`world.afterEvents.playerBreakBlock`で検知し、対になるエンティティの全スロットを走査して`dimension.spawnItem()`でドロップさせてから`entity.remove()`。`remove()`は「死亡」を経由しない即時除去なので、`minecraft:inventory`の`private`設定に関わらずエンジンは自動ドロップしない(常に自前でドロップ処理が必要)。
+- `minecraft:damage_sensor`（`{"triggers": {"deals_damage": "no"}}`）であらゆるダメージを無効化し、通常は`remove()`以外の経路では死なないようにできる(実機確認済み)。
+- 保険として`private: false`（死亡時の自動ドロップを有効のまま）にしておき、`world.afterEvents.entityDie`を監視。対応するブロックがまだ存在するなら新しいエンティティを再生成し、死亡時にこぼれた実アイテムを周辺スキャンで回収して詰め直す自己修復を実装・実機確認済み。`EntityDieAfterEvent.deadEntity`はハンドラ内で`location`等が読み取り可能であることも確認できた。
+
+## 7. ターミナルUI
+
+UIフレームワークは `@minecraft/server-ui` の新しいリアクティブフォームAPI（Microsoft公式名称「DDUI」、`CustomForm`/`ObservableString`等）を使う。
+
+**MVPではテキストラベルの`CustomForm`のみ**で核となる処理（ネットワークのデータ構造、注文処理）を作り切ることを優先する。アイテムアイコン付きグリッド表示（JSON UIによるフォームの見た目上書き。参考: [Chest-UI](https://github.com/Herobrine643928/Chest-UI)。ただし同プロジェクトもインベントリ部分は見た目だけでドラッグ&ドロップは実現していない＝本質的にはクリック駆動のボタンを化粧しているだけ）は、UX向上のための後日の視覚強化として保留する。個人利用アドオンとして将来のMinecraftアップデートとの互換性は考慮しなくてよい、というスタンスなので、この種の手法自体は将来的な採用候補として排除しない。
+
+- **右クリック（Shift問わず）**: 常に注文UIを表示する。引き出し操作は真下のストレージを直接開くことで行うため、専用UIは無い。
+  1. 開いた瞬間にそのネットワーク内の全ストレージをスキャンし、`displayKey`でグルーピングしたカタログ（サーバー側の一時変数）を作成する。
+  2. `CustomForm`を表示: 検索用`textField`（`ObservableString`, `clientWritable: true`）と、共有の数量`slider`（`ObservableNumber`, 1〜64）を用意する。`subscribe()`でカタログを絞り込み、あらかじめ確保した固定数（例: 8行）の結果ボタンの`label`/`visible` Observableを更新する。
+  3. 結果ボタンを押すと、その時点の共有スライダーの値の数量で、その行のアイテムがカートに加算される（行ごとに個別の数量欄は持たない）。
+  4. カート内容を表示する`label`（`ObservableString`）を更新する。ボタンを押してもフォームは閉じない（DDUIの特性）。
+  5. 「注文確定」ボタンでカート内容を1つの`Order`として`wh:issuing:<networkId>`にpushしてフォームを閉じる。
+
+## 8. MVPスコープ外（合意済み）
+
+- ターミナル側での部分成功/失敗のハンドリング（`wh:partial`への記録はコントローラ側で行うが、ターミナルはそれを読み出して何かする処理を持たない）
+- 「全部揃うか、揃わないなら何も取得しないか」を選べる注文タイプ
+- グラフィックの作り込み（アイコン付きグリッドUIを含む。7章参照）
+- コントローラ/ターミナル/レンチのクラフトレシピ（`/give`やクリエイティブインベントリからのみ入手）
+- グレード（tier）による実際の性能差（仕組みは用意するが、MVPでは全て同一の固定値）
+
+## 9. 将来の拡張アイデア（今は着手しない）
+
+- Chest-UI等を参考にした、JSON UIによるアイコン付きグリッド表示への見た目強化（7章参照）。
+- 表示に出ない複雑な属性（本の中身、地図IDなど）でアイテムを区別したくなった場合: ネットワークごとに非表示・非当たり判定の専用エンティティ（見本帳）を持たせ、注文時に選択したアイテムの`clone()`を1個保管し、`isStackableWith`や自前の比較関数で照合する方式が候補。
+- 部分成功時にターミナル側で再試行/キャンセルを選べるようにする。
+- 「全部揃うか、何も取得しないか」の注文タイプ追加。
+- レンチの汎用設定ツール化。
+
+## 10. 未確定・要検証事項
+
+1. **レンチの編集モードの細部**: 別ネットワークのコントローラを右クリックした時に編集対象を切り替える、という挙動で進める想定だが未実装。
+2. **注文UIの具体的なワイヤーフレーム**: カート方式の大枠は合意しているが、実際のボタン数・レイアウトは実装しながら調整する。
+3. **強調表示パーティクルの寿命**: `minecraft:villager_happy`は発生後1〜2秒かけてフェードアウトするため、切断直後も一瞬残ってしまう(実機で確認・指摘あり)。候補: (a) RPに寿命の短い自作パーティクル効果を定義する(安定版APIのみで完結、リスク低、推奨)。(b) `@minecraft/debug-utilities`の`DebugBox`で`.remove()`により即座に消す(体験は最良だが、プレビュー版限定のバージョン表記のため通常版Minecraftではパック全体が読み込めなくなるリスクがある)。まだ着手していない。
+
+## 11. 技術メモ
+
+- `@minecraft/server` 2.1.0 / `@minecraft/server-ui` 2.1.0、`min_engine_version` 1.21.0 を使用（プロジェクトに既存設定済み）。
+- `ItemStack.isStackableWith(other)`: エンジン自身が「タイプ＋耐久値/エンチャント/名前などのカスタムデータ」を比較して判定するが、**最大スタックサイズが1のアイテム（道具・装備など）には常に`false`を返す**仕様のため、5章の`displayKey`方式ではこれに依存しない。
+- `world.getDynamicPropertyTotalByteCount()`で動的プロパティの総バイト数を監視できる。明確な上限は非公開だが、個人利用規模では問題にならない見込み。
+- ブロックの`minecraft:block.components`に`minecraft:inventory`は指定不可（6章参照、実機検証済み）。

@@ -1,0 +1,12 @@
+{
+  "resource_pack_name": "warehouse_addon",
+  "texture_name": "atlas.terrain",
+  "texture_data": {
+    "wh:controller": {
+      "textures": "textures/blocks/controller"
+    },
+    "wh:terminal": {
+      "textures": "textures/blocks/terminal"
+    }
+  }
+}
