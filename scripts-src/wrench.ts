@@ -1,6 +1,7 @@
 import { Block, Dimension, ItemCustomComponent, Player, system, Vector3, world } from "@minecraft/server";
 import {
   findAdjacentConnectedStorage,
+  findMembership,
   findNetworkByController,
   findPhysicalStoragePair,
   getAllNetworks,
@@ -106,6 +107,22 @@ function handleControllerUse(player: Player, dimension: Dimension, block: Block)
 // デフォルトモード。コントローラでの編集開始/終了はhandleControllerUseに一本化されている。
 function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, editingNetworkId: string): void {
   if (isTerminalLikeBlock(block.typeId)) {
+    const network = getNetwork(editingNetworkId);
+    const alreadyInThisNetwork = network?.terminals.some((t) => locEquals(t, block.location));
+    if (!alreadyInThisNetwork) {
+      // ターミナルはストレージと違い、同時に複数のネットワークに接続されると
+      // どちらのネットワーク宛の注文/納入として処理すべきか曖昧になり誤動作する
+      // (実機で発見された不具合の修正済み)。そのため、他のネットワークに既に
+      // 接続済みのターミナルは、そのネットワークから切断するまで新規接続を拒否する。
+      const existingMembership = findMembership(dimension.id, block.location);
+      if (existingMembership && existingMembership.role === "terminal") {
+        player.sendMessage(
+          "§cこのターミナルは既に別のネットワークに接続されています(1台のターミナルは同時に1つのネットワークにしか接続できません)。"
+        );
+        return;
+      }
+    }
+
     const result = toggleTerminal(editingNetworkId, block.location);
     player.sendMessage(result === "connected" ? "§bターミナルを接続しました。" : "§eターミナルを切断しました。");
     return;
