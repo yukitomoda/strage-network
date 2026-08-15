@@ -53,7 +53,7 @@ export function removeSettingsEntity(dimension: Dimension, storageLoc: Vector3):
   findSettingsEntity(dimension, storageLoc)?.remove();
 }
 
-// Drain指定: 有効なストレージには、預け入れ(納入/自動預け入れ)が新たに行われなくなり、
+// Drain指定: 有効なストレージには、預け入れ(倉庫端末からの預け入れ・自動端末からの自動預け入れ)が新たに行われなくなり、
 // 倉庫の整理は逆にこのストレージの中身を他のストレージへできる限り退避させる(倉庫レンチ参照)。
 export function getDrain(dimension: Dimension, storageLoc: Vector3): boolean {
   const value = findSettingsEntity(dimension, storageLoc)?.getDynamicProperty(DRAIN_PROPERTY);

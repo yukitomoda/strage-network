@@ -11,7 +11,7 @@ const THROUGHPUT_PER_TICK = 1_0;
 // MVP: 発行遅延なし。将来はターミナルのグレードに応じて可変にする。
 const ISSUE_DELAY_TICKS = 0;
 
-// 戻り値の id はプレイヤーへの表示用(注文確定時のメッセージ、完了通知に使う)。
+// 戻り値の id はプレイヤーへの表示用(引き出し確定時のメッセージ、完了通知に使う)。
 export function submitOrder(networkId: string, terminalLoc: Vector3, playerName: string, lines: OrderLine[]): string {
   const order: Order = { id: generateOrderId(), playerName, terminal: terminalLoc, lines };
   const entries = getIssuing(networkId);
@@ -42,7 +42,7 @@ export function processNetworkOrders(network: NetworkData): void {
     // network.terminals(登録データ)を正とする。ここに無ければ本当に切断/破壊されたとみなす。
     // 登録はあるのにブロックが今取得できない場合は、ワールド再読み込み直後などでその
     // チャンクがまだ読み込まれていないだけの可能性があるため、打ち切らずに次tickへ持ち越す
-    // (実機で、これが原因で処理中の注文が誤って消えることを確認済み)。
+    // (実機で、これが原因で処理中の引き出しが誤って消えることを確認済み)。
     const stillRegistered = network.terminals.some((t) => locEquals(t, order.terminal));
     if (!stillRegistered) {
       finalizeOrder(network, dimension, order);
@@ -54,7 +54,7 @@ export function processNetworkOrders(network: NetworkData): void {
     const terminalBlock = dimension.getBlock(order.terminal);
     if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
       // 登録はあるが、今はブロックを取得できない(チャンク未読み込み等)。今回はここで諦めて
-      // 次tickに再試行する(FIFOを守るため、後続の注文の処理には進まない)。
+      // 次tickに再試行する(FIFOを守るため、後続の引き出しの処理には進まない)。
       break;
     }
 
@@ -125,7 +125,7 @@ function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order)
 
   player.sendMessage(
     shortfall.length > 0
-      ? `§e${namePrefix}注文 #${order.id} の受け取り準備ができました(一部品切れで届かなかった品があります)。`
-      : `§b${namePrefix}注文 #${order.id} の受け取り準備ができました。`
+      ? `§e${namePrefix}引き出し #${order.id} の受け取り準備ができました(一部品切れで届かなかった品があります)。`
+      : `§b${namePrefix}引き出し #${order.id} の受け取り準備ができました。`
   );
 }

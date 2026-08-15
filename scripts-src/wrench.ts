@@ -111,7 +111,7 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     const alreadyInThisNetwork = network?.terminals.some((t) => locEquals(t, block.location));
     if (!alreadyInThisNetwork) {
       // ターミナルはストレージと違い、同時に複数のネットワークに接続されると
-      // どちらのネットワーク宛の注文/納入として処理すべきか曖昧になり誤動作する
+      // どちらのネットワーク宛の引き出し/預け入れとして処理すべきか曖昧になり誤動作する
       // (実機で発見された不具合の修正済み)。そのため、他のネットワークに既に
       // 接続済みのターミナルは、そのネットワークから切断するまで新規接続を拒否する。
       const existingMembership = findMembership(dimension.id, block.location);

@@ -47,7 +47,7 @@ function checkNetworkAutoTerminals(network: NetworkData): void {
   }
 }
 
-// 目標を下回っている品目を注文する(従来の「自動引き出し」相当)。
+// 目標を下回っている品目を引き出しする(従来の「自動引き出し」相当)。
 function checkShortfalls(
   network: NetworkData,
   terminalLoc: Vector3,
@@ -77,7 +77,7 @@ function checkShortfalls(
   }
 }
 
-// リストに無い、またはリストの目標を上回っている品目をネットワークへ預け入れる(自動預け入れ)。
+// リストに無い、またはリストの目標を上回っている品目を預け入れる(自動預け入れ)。
 // 目標分は残す(送るのは超過分のみ)。リストに無い品目は目標0扱いなので全量が対象になる。
 function checkExcess(
   network: NetworkData,
@@ -109,7 +109,7 @@ function checkExcess(
   }
 }
 
-// 直前のチェックで出した注文がまだ処理中(発行待ち含む)なら、同じ品目を二重に注文しない。
+// 直前のチェックで出した引き出しがまだ処理中(発行待ち含む)なら、同じ品目を二重に引き出ししない。
 function hasPendingOrderFor(
   networkId: string,
   terminalLoc: Vector3,

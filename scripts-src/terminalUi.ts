@@ -17,7 +17,7 @@ import { DepositLine } from "./state";
 
 const ROW_COUNT = 8;
 
-// 注文(引き出し)/納入(格納)のどちらのカートラインも同じ形なので共通の型で扱う。
+// 引き出し/預け入れのどちらのカートラインも同じ形なので共通の型で扱う。
 type CartLine = {
   itemTypeId: string;
   itemName?: string;
@@ -26,15 +26,7 @@ type CartLine = {
   exhausted: boolean;
 };
 
-// カスタム名(nameTag)があればそのまま表示、無ければ localizationKey をクライアントの
-// langファイルで解決してもらう(自前の翻訳テーブルは持たない。docs/design.md 5章参照)。
-// autoTerminalUi.ts のウィッシュリスト検索結果表示でも使うため export する。
-export function catalogEntryMessage(entry: CatalogEntry): UIRawMessage {
-  const namePart: UIRawMessage = entry.key.name ? { text: entry.key.name } : { translate: entry.localizationKey };
-  return { rawtext: [namePart, { text: ` (在庫${entry.total})` }] };
-}
-
-// 注文タブ/納入タブそれぞれの「検索+数量+結果一覧+カート+確定」を組み立てる共通処理。
+// 引き出しタブ/預け入れタブそれぞれの「検索+数量+結果一覧+確定」を組み立てる共通処理。
 // タブの切り替えは全コントロールを visible で出し分けるだけ(DDUIにタブ専用の部品は無いため)。
 function setupTab(
   form: CustomForm,
@@ -46,6 +38,7 @@ function setupTab(
   const cart: CartLine[] = [];
   const searchText = new ObservableString("", { clientWritable: true });
   const quantity = new ObservableNumber(1, { clientWritable: true });
+  const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // OFF: 増やす / ON: 減らす
 
   const rowLabels: ObservableUIRawMessage[] = [];
   const rowVisible: ObservableBoolean[] = [];
@@ -93,8 +86,14 @@ function setupTab(
     if (active) refreshFilter();
   });
 
+  const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
+  increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
+
   form.textField("検索", searchText, { visible: tabVisible });
   form.slider("数量", quantity, 1, 64, { step: 1, visible: tabVisible });
+  form.toggle(increaseModeLabel, increaseMode, {
+    visible: tabVisible,
+  });
 
   // タブ非表示中はページャーボタンも隠す(rowVisibleFlagと同じ、AND合成が無いための対処)。
   tabVisible.subscribe((active) => {
@@ -133,11 +132,17 @@ function setupTab(
         const entry = filtered[i];
         if (!entry) return;
         const amount = Math.max(1, Math.floor(quantity.getData()));
-        const existing = cart.find(
+        const existingIndex = cart.findIndex(
           (l) => l.itemTypeId === entry.key.typeId && (l.itemName ?? "") === (entry.key.name ?? "")
         );
-        if (existing) {
-          existing.requested = Math.min(existing.requested + amount, entry.total); // 在庫数を超えないようにする
+
+        if (!increaseMode.getData()) {
+          if (existingIndex === -1) return; // カートに無い品目は減らせない
+          const existing = cart[existingIndex];
+          existing.requested -= amount;
+          if (existing.requested <= 0) cart.splice(existingIndex, 1); // 0以下になったらカートから外す
+        } else if (existingIndex !== -1) {
+          cart[existingIndex].requested = Math.min(cart[existingIndex].requested + amount, entry.total); // 在庫数を超えないようにする
         } else {
           cart.push({
             itemTypeId: entry.key.typeId,
@@ -181,9 +186,9 @@ function setupTab(
   if (tabVisible.getData()) refreshFilter();
 }
 
-// 納入タブ: 数量指定は不要で、張り付いた先のコンテナに今入っている物を全部まとめて
+// 預け入れタブ: 数量指定は不要で、張り付いた先のコンテナに今入っている物を全部まとめて
 // 1回のリクエストにするワンボタン方式。DepositRequest/DepositLine自体は個数を持てる
-// 形のままなので、将来「一部だけ納入」に変えたくなってもデータ構造の変更は不要。
+// 形のままなので、将来「一部だけ預け入れ」に変えたくなってもデータ構造の変更は不要。
 function setupDepositTab(
   form: CustomForm,
   player: Player,
@@ -206,7 +211,7 @@ function setupDepositTab(
     }
     const parts: UIRawMessage[] = [];
     catalog.forEach((entry, i) => {
-      if (i > 0) parts.push({ text: ", " });
+      if (i > 0) parts.push({ text: "\n" });
       parts.push(entry.key.name ? { text: entry.key.name } : { translate: entry.localizationKey });
       parts.push({ text: ` x${entry.total}` });
     });
@@ -220,7 +225,7 @@ function setupDepositTab(
 
   form.label(summaryLabel, { visible: tabVisible });
   form.button(
-    "納入(すべて送る)",
+    "すべて預け入れ",
     () => {
       if (!container) return;
       const catalog = scanContainerCatalog(container);
@@ -261,13 +266,13 @@ function setupSettingsTab(
     setTerminalName(dimension, terminalLoc, value);
   });
 
-  form.label("このターミナルだけのローカル設定です。", { visible: tabVisible });
+  form.label("このターミナルの設定です。", { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.textField("名前", name, {
-    description: "注文発行時/配送完了時の通知に表示されます。",
+    description: "通知時に表示されます。",
     visible: tabVisible,
   });
-  form.toggle("注文の配送完了時に通知を表示する", notifyOnComplete, { visible: tabVisible });
+  form.toggle("引き出し完了時に通知を表示する", notifyOnComplete, { visible: tabVisible });
 }
 
 export function showOrderUi(player: Player, block: Block): void {
@@ -290,7 +295,7 @@ export function showOrderUi(player: Player, block: Block): void {
   const isDepositTab = new ObservableBoolean(false);
   const isSettingsTab = new ObservableBoolean(false);
 
-  // タブ切り替えはボタンではなくドロップダウンで行う。選択値(0=注文/1=納入/2=設定)の
+  // タブ切り替えはボタンではなくドロップダウンで行う。選択値(0=引き出し/1=預け入れ/2=設定)の
   // 変化を購読して、各タブのvisible/disabled用Observableに反映する。
   const tabSelection = new ObservableNumber(0, { clientWritable: true });
   tabSelection.subscribe((index) => {
@@ -301,14 +306,14 @@ export function showOrderUi(player: Player, block: Block): void {
 
   const form = new CustomForm(player, terminalName ? `倉庫端末: ${terminalName}` : "倉庫端末");
   form.dropdown("", tabSelection, [
-    { label: "注文", value: 0 },
-    { label: "納入", value: 1 },
+    { label: "引き出し", value: 0 },
+    { label: "預け入れ", value: 1 },
     { label: "設定", value: 2 },
   ]);
 
-  setupTab(form, isOrderTab, orderCatalog, "注文確定", (lines) => {
+  setupTab(form, isOrderTab, orderCatalog, "確定", (lines) => {
     const orderId = submitOrder(network.id, block.location, player.name, lines);
-    player.sendMessage(`§b${namePrefix}注文 #${orderId} をネットワークへ送信しました。`);
+    player.sendMessage(`§b${namePrefix}引き出し #${orderId} をネットワークへ送信しました。`);
   });
 
   setupDepositTab(form, player, isDepositTab, attachedContainer, network.id, block.location);

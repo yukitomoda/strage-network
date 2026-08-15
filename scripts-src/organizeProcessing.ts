@@ -5,7 +5,7 @@ import { generateId, NetworkData, OrganizeRequest } from "./state";
 import { getDrain } from "./storageSettings";
 import { insertIntoStorages } from "./storageScan";
 
-// 倉庫の整理(注文/納入と同じくコントローラのタスク定期実行の仕組みに乗せる)。
+// 倉庫の整理(引き出し/預け入れと同じくコントローラのタスク定期実行の仕組みに乗せる)。
 // MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
 // docs/design.md 4章「スループット制」参照。
 const ORGANIZE_THROUGHPUT_PER_TICK = 1_000_000;

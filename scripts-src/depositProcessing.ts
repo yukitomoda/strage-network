@@ -11,7 +11,7 @@ import { DepositLine, DepositRequest, generateId, locEquals, NetworkData, Partia
 import { getDrain } from "./storageSettings";
 import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 
-// 注文(orderProcessing.ts)と対称だが、方向が逆(ターミナルの張り付いた先 -> ネットワーク内の
+// 引き出し(orderProcessing.ts)と対称だが、方向が逆(ターミナルの張り付いた先 -> ネットワーク内の
 // ストレージ群)で、スループット・発行遅延は個別に設定できるようにしている。
 // MVPでは両方とも十分大きい固定値/0で、実質即時処理になる。docs/design.md 4章参照。
 const DEPOSIT_THROUGHPUT_PER_TICK = 1_000_000;
@@ -68,7 +68,7 @@ export function processNetworkDeposits(network: NetworkData): void {
       break;
     }
 
-    // 納入元はターミナルが張り付いている面(注文の搬入先と同じ場所)。毎回動的に見る。
+    // 預け入れ元はターミナルが張り付いている面(引き出しの搬入先と同じ場所)。毎回動的に見る。
     const attachedLoc = getAttachedStorageLocation(terminalBlock);
     const sourceContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
     if (!sourceContainer) {

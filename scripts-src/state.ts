@@ -45,8 +45,8 @@ export type PartialResult = {
   shortfall: PartialResultLine[];
 };
 
-// 納入(ターミナルの張り付いた先のストレージ -> ネットワーク内のストレージ群)。
-// 注文と対称な構造だが、方向が逆で、スループット等も個別に設定できるよう別系統にする。
+// 預け入れ(ターミナルの張り付いた先のストレージ -> ネットワーク内のストレージ群)。
+// 引き出しと対称な構造だが、方向が逆で、スループット等も個別に設定できるよう別系統にする。
 export type DepositLine = {
   itemTypeId: string;
   itemName?: string;
@@ -80,7 +80,7 @@ export type WishlistLine = {
   targetAmount: number;
 };
 
-// 倉庫の整理(コントローラのタスク定期実行の仕組みに乗せる)。注文/納入と違い搬入出先が
+// 倉庫の整理(コントローラのタスク定期実行の仕組みに乗せる)。引き出し/預け入れと違い搬入出先が
 // 無く、対象は「そのリクエストを作った時点でネットワークに存在した品目一覧」のスナップショット。
 export type OrganizeLine = {
   itemTypeId: string;
@@ -97,7 +97,7 @@ export function generateId(): string {
   return `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
 }
 
-// 表示用IDの共通部分。マルチプレイでプレイヤーが自分の注文/ターミナルをチャット上で
+// 表示用IDの共通部分。マルチプレイでプレイヤーが自分の引き出し/ターミナルをチャット上で
 // 見分けられればよく、厳密な一意性は不要なので、短い英数字4桁にしている(36^4 ≈ 168万通り)。
 function generateShortCode(): string {
   return Math.floor(Math.random() * 36 ** 4)
@@ -106,13 +106,13 @@ function generateShortCode(): string {
     .padStart(4, "0");
 }
 
-// 注文の表示用ID。
+// 引き出しの表示用ID。
 export function generateOrderId(): string {
   return `TAK-${generateShortCode()}`;
 }
 
 // ターミナルの初期名。設定タブでいつでも変更できる前提の、区別のためだけの仮名。
-// 注文ID・自動端末の初期名とひと目で見分けられるよう接頭辞を変えている。
+// 引き出しID・自動端末の初期名とひと目で見分けられるよう接頭辞を変えている。
 export function generateTerminalName(): string {
   return `TRM-${generateShortCode()}`;
 }

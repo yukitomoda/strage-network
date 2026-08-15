@@ -38,12 +38,12 @@ function networkStorageContainers(dimension: Dimension, network: NetworkData): C
   return containers;
 }
 
-// 注文UIのカタログ(=ネットワーク内のストレージ群の在庫)。
+// 引き出しUIのカタログ(=ネットワーク内のストレージ群の在庫)。
 export function scanCatalog(dimension: Dimension, network: NetworkData): CatalogEntry[] {
   return scanContainers(networkStorageContainers(dimension, network));
 }
 
-// 納入UIのカタログ(=ターミナルの張り付いた先のコンテナの中身)。
+// 預け入れUIのカタログ(=ターミナルの張り付いた先のコンテナの中身)。
 export function scanContainerCatalog(container: Container): CatalogEntry[] {
   return scanContainers([container]);
 }
@@ -96,7 +96,7 @@ export function extractFromStorages(
 }
 
 // 「どのストレージに何(displayKey)が既に置かれているか」の索引。key は serializeKey() の値。
-// 大きいネットワーク(例: ラージチェスト30個=1620スロット)で、納入する品目ごとに全スロットを
+// 大きいネットワーク(例: ラージチェスト30個=1620スロット)で、預け入れする品目ごとに全スロットを
 // 何度も舐め直すと重くなりすぎるため、1tickにつき1回だけ作って使い回す想定(呼び出し元で保持)。
 export type StorageIndex = Map<string, Vector3[]>;
 
@@ -143,7 +143,7 @@ function orderStoragesByPriority(storages: Vector3[], key: DisplayKey, index?: S
 // と対称: 取り出しと格納は1スロット単位でアトミックに行うため、宙に浮いたアイテムは発生しない。
 // storageIndex を渡すと、既に同じアイテムを持っているストレージを優先してスタックさせる。
 // destinationStorages を渡すと、搬入先候補をそのリストに絞り込める(省略時はnetwork.storages
-// 全体)。Drain指定されたストレージを除外する目的で、呼び出し元(納入処理・倉庫の整理)が
+// 全体)。Drain指定されたストレージを除外する目的で、呼び出し元(預け入れ処理・倉庫の整理)が
 // ネットワークにつき1tick1回だけ絞り込んで渡す想定(毎回このstorage単位で絞り込みを
 // 計算し直すと、Drain判定用の非表示エンティティ検索が呼び出し回数分走ってしまうため)。
 // 戻り値は実際に搬入できた数(候補先が満杯なら amount より少なくなる)。
