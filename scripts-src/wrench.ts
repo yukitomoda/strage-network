@@ -15,8 +15,8 @@ import { getDrain, removeSettingsEntity as removeStorageSettingsEntity, setDrain
 import { isTerminalLikeBlock } from "./terminalBlock";
 import { getToolMode } from "./toolMode";
 import { showToolModeUi } from "./toolModeUi";
+import { getEditingNetworkId, setEditingNetworkId } from "./editingSession";
 
-const EDITING_NETWORK_PROPERTY = "wh:editing_network";
 const HIGHLIGHT_INTERVAL = 10;
 
 // onUse は「ブロックに対して使った場合」も(onUseOnとは別に)発火してしまうため、
@@ -24,15 +24,6 @@ const HIGHLIGHT_INTERVAL = 10;
 // 実際のブロック操作の到達距離とは厳密には一致しなくてよく、あくまで
 // 「ブロックを操作したその右クリックでメニューが誤って開かない」ことが目的の判定。
 const AIR_USE_RAYCAST_DISTANCE = 8;
-
-function getEditingNetworkId(player: Player): string | undefined {
-  const value = player.getDynamicProperty(EDITING_NETWORK_PROPERTY);
-  return typeof value === "string" ? value : undefined;
-}
-
-function setEditingNetworkId(player: Player, networkId: string | undefined): void {
-  player.setDynamicProperty(EDITING_NETWORK_PROPERTY, networkId);
-}
 
 export const wrenchItemComponent: ItemCustomComponent = {
   // 空中(ブロックを対象としない)で使った時: モード選択メニューを開く。

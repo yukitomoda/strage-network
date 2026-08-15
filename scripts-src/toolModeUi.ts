@@ -1,5 +1,6 @@
 import { Player } from "@minecraft/server";
 import { CustomForm } from "@minecraft/server-ui";
+import { getEditingNetworkId, setEditingNetworkId } from "./editingSession";
 import { getToolMode, setToolMode, ToolMode } from "./toolMode";
 
 const MODE_LABELS: Record<ToolMode, string> = {
@@ -26,6 +27,17 @@ export function showToolModeUi(player: Player): void {
       player.sendMessage(`§bレンチのモードを「${MODE_LABELS[mode]}」に切り替えました。`);
       form.close();
     }, { disabled: mode === current, tooltip: MODE_DESCRIPTIONS[mode] });
+  }
+
+  // ネットワーク編集中(構築/Drainいずれか)は、コントローラまで戻らなくても終了できるように
+  // 同じ操作(handleControllerUseのトグルOFF相当)をここからも行えるようにする。
+  if (getEditingNetworkId(player) !== undefined) {
+    form.divider();
+    form.button("編集モードを終了する", () => {
+      setEditingNetworkId(player, undefined);
+      player.sendMessage("§eネットワーク編集を終了しました。");
+      form.close();
+    });
   }
 
   form.show().catch((e) => console.error(e));
