@@ -80,6 +80,19 @@ export type WishlistLine = {
   targetAmount: number;
 };
 
+// 倉庫の整理(コントローラのタスク定期実行の仕組みに乗せる)。注文/納入と違い搬入出先が
+// 無く、対象は「そのリクエストを作った時点でネットワークに存在した品目一覧」のスナップショット。
+export type OrganizeLine = {
+  itemTypeId: string;
+  itemName?: string;
+  done: boolean;
+};
+
+export type OrganizeRequest = {
+  id: string;
+  lines: OrganizeLine[];
+};
+
 export function generateId(): string {
   return `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
 }

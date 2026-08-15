@@ -9,6 +9,7 @@ import {
   locEquals,
   NetworkData,
   Order,
+  OrganizeRequest,
   PartialResult,
   readJson,
   writeJson,
@@ -36,6 +37,9 @@ function depositIssuingKey(id: string): string {
 }
 function depositPartialKey(id: string): string {
   return `wh:deposit_partial:${id}`;
+}
+function organizeKey(id: string): string {
+  return `wh:organize:${id}`;
 }
 
 export function getNetworkIds(): string[] {
@@ -85,6 +89,7 @@ export function destroyNetwork(id: string): void {
   clearProperty(depositsKey(id));
   clearProperty(depositIssuingKey(id));
   clearProperty(depositPartialKey(id));
+  clearProperty(organizeKey(id));
 }
 
 export function findNetworkByController(dimensionId: string, loc: Vector3): NetworkData | undefined {
@@ -257,4 +262,14 @@ export function appendDepositPartial(networkId: string, result: DepositPartialRe
   const results = getDepositPartial(networkId);
   results.push(result);
   writeJson(depositPartialKey(networkId), results);
+}
+
+// 整理リクエストは同時に1件まで(ボタン連打で重複キューイングしないよう submitOrganize 側で
+// 制御する)。将来複数リクエストを認める場合も配列で保持しておけば構造変更は不要。
+export function getOrganizeQueue(networkId: string): OrganizeRequest[] {
+  return readJson<OrganizeRequest[]>(organizeKey(networkId)) ?? [];
+}
+
+export function setOrganizeQueue(networkId: string, requests: OrganizeRequest[]): void {
+  writeJson(organizeKey(networkId), requests);
 }
