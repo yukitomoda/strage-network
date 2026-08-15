@@ -123,31 +123,41 @@ export function buildStorageIndex(dimension: Dimension, network: NetworkData): S
 }
 
 // 索引がある場合、そのキーを既に持っているストレージを優先し、残りを末尾に回す。
+// index は network.storages 全体から作られている一方、storages(候補先)は Drain指定などで
+// 絞り込まれている場合があるため、priority 側も storages に実在するものだけに絞ってから使う
+// (絞り込み対象外の場所を誤って先頭に混入させないため)。
 function orderStoragesByPriority(storages: Vector3[], key: DisplayKey, index?: StorageIndex): Vector3[] {
   if (!index) return storages;
   const priority = index.get(serializeKey(key));
   if (!priority || priority.length === 0) return storages;
 
-  const prioritySet = new Set(priority.map((l) => `${l.x},${l.y},${l.z}`));
+  const storageSet = new Set(storages.map((l) => `${l.x},${l.y},${l.z}`));
+  const prioritized = priority.filter((l) => storageSet.has(`${l.x},${l.y},${l.z}`));
+  const prioritySet = new Set(prioritized.map((l) => `${l.x},${l.y},${l.z}`));
   const rest = storages.filter((l) => !prioritySet.has(`${l.x},${l.y},${l.z}`));
-  return [...priority, ...rest];
+  return [...prioritized, ...rest];
 }
 
 // sourceContainer から指定アイテムを最大 amount 個取り出し、ネットワーク内のストレージ群へ
 // 分散して格納する(1つのストレージで入りきらない分は次のストレージへ)。extractFromStorages
 // と対称: 取り出しと格納は1スロット単位でアトミックに行うため、宙に浮いたアイテムは発生しない。
 // storageIndex を渡すと、既に同じアイテムを持っているストレージを優先してスタックさせる。
-// 戻り値は実際に搬入できた数(ネットワーク側が満杯なら amount より少なくなる)。
+// destinationStorages を渡すと、搬入先候補をそのリストに絞り込める(省略時はnetwork.storages
+// 全体)。Drain指定されたストレージを除外する目的で、呼び出し元(納入処理・倉庫の整理)が
+// ネットワークにつき1tick1回だけ絞り込んで渡す想定(毎回このstorage単位で絞り込みを
+// 計算し直すと、Drain判定用の非表示エンティティ検索が呼び出し回数分走ってしまうため)。
+// 戻り値は実際に搬入できた数(候補先が満杯なら amount より少なくなる)。
 export function insertIntoStorages(
   dimension: Dimension,
   network: NetworkData,
   key: DisplayKey,
   amount: number,
   sourceContainer: Container,
-  storageIndex?: StorageIndex
+  storageIndex?: StorageIndex,
+  destinationStorages: Vector3[] = network.storages
 ): number {
   let remaining = amount;
-  const orderedStorages = orderStoragesByPriority(network.storages, key, storageIndex);
+  const orderedStorages = orderStoragesByPriority(destinationStorages, key, storageIndex);
 
   for (let i = 0; i < sourceContainer.size && remaining > 0; i++) {
     const item = sourceContainer.getItem(i);

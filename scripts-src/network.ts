@@ -124,6 +124,15 @@ export function findMembership(
 // 直接確認する(一意な目印アイテムを一時的に置いて、もう片方から見えるか確認する)。
 const SINGLE_CONTAINER_MAX_SIZE = 27;
 
+function neighborsOf(loc: Vector3): Vector3[] {
+  return [
+    { x: loc.x + 1, y: loc.y, z: loc.z },
+    { x: loc.x - 1, y: loc.y, z: loc.z },
+    { x: loc.x, y: loc.y, z: loc.z + 1 },
+    { x: loc.x, y: loc.y, z: loc.z - 1 },
+  ];
+}
+
 function containersShareStorage(a: Container, b: Container): boolean {
   if (a.size !== b.size || a.size === 0) return false;
 
@@ -150,24 +159,46 @@ function containersShareStorage(a: Container, b: Container): boolean {
   return shared;
 }
 
+// 中身を共有する隣接ブロック(二連チェストのもう半分)を、ネットワーク登録の有無に関係なく
+// 純粋に物理的に探す。倉庫レンチのDrain機能で「登録されていない方の半分」を扱う時にも使う。
+export function findPhysicalStoragePair(dimension: Dimension, loc: Vector3): Vector3 | undefined {
+  const container = dimension.getBlock(loc)?.getComponent("inventory")?.container;
+  if (!container || container.size <= SINGLE_CONTAINER_MAX_SIZE) return undefined;
+
+  for (const n of neighborsOf(loc)) {
+    const neighborContainer = dimension.getBlock(n)?.getComponent("inventory")?.container;
+    if (neighborContainer && containersShareStorage(container, neighborContainer)) return n;
+  }
+  return undefined;
+}
+
 export function findAdjacentConnectedStorage(
   dimension: Dimension,
   network: NetworkData,
   loc: Vector3
 ): Vector3 | undefined {
-  const container = dimension.getBlock(loc)?.getComponent("inventory")?.container;
-  if (!container || container.size <= SINGLE_CONTAINER_MAX_SIZE) return undefined;
+  const pair = findPhysicalStoragePair(dimension, loc);
+  return pair && network.storages.some((s) => locEquals(s, pair)) ? pair : undefined;
+}
 
-  const neighbors: Vector3[] = [
-    { x: loc.x + 1, y: loc.y, z: loc.z },
-    { x: loc.x - 1, y: loc.y, z: loc.z },
-    { x: loc.x, y: loc.y, z: loc.z + 1 },
-    { x: loc.x, y: loc.y, z: loc.z - 1 },
-  ];
-  for (const n of neighbors) {
-    if (!network.storages.some((s) => locEquals(s, n))) continue;
-    const neighborContainer = dimension.getBlock(n)?.getComponent("inventory")?.container;
-    if (neighborContainer && containersShareStorage(container, neighborContainer)) return n;
+// loc がどのネットワークの登録済みストレージに属すかを解決する。loc 自体が登録されて
+// いなくても、二連チェストの「登録されていない方の半分」であれば、中身を共有する
+// 登録済みの隣(=正としての登録位置)を見つけて返す(倉庫レンチのDrain機能で使用)。
+export function resolveStorageMembership(
+  dimension: Dimension,
+  loc: Vector3
+): { network: NetworkData; registeredLocation: Vector3 } | undefined {
+  for (const network of getAllNetworks()) {
+    if (network.dimensionId !== dimension.id) continue;
+    if (network.storages.some((s) => locEquals(s, loc))) return { network, registeredLocation: loc };
+  }
+
+  const pair = findPhysicalStoragePair(dimension, loc);
+  if (!pair) return undefined;
+
+  for (const network of getAllNetworks()) {
+    if (network.dimensionId !== dimension.id) continue;
+    if (network.storages.some((s) => locEquals(s, pair))) return { network, registeredLocation: pair };
   }
   return undefined;
 }

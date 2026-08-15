@@ -1,5 +1,5 @@
-import { Dimension, Vector3 } from "@minecraft/server";
-import { WishlistLine } from "./state";
+import { Dimension, Entity, Vector3 } from "@minecraft/server";
+import { locEquals, WishlistLine } from "./state";
 
 // ターミナルごとのローカル設定を保持する非表示エンティティ。ブロックには動的プロパティを
 // 持たせられないため(docs/design.md 2章参照)。network.terminals(所属情報)とは意図的に
@@ -13,18 +13,50 @@ const NOTIFY_ON_COMPLETE_PROPERTY = "wh:notify_on_complete";
 const NAME_PROPERTY = "wh:name";
 const WISHLIST_PROPERTY = "wh:wishlist";
 const AUTO_DEPOSIT_PROPERTY = "wh:auto_deposit";
+const OWNER_LOCATION_PROPERTY = "wh:owner_loc";
 
 function centerOf(loc: Vector3): Vector3 {
   return { x: loc.x + 0.5, y: loc.y + 0.5, z: loc.z + 0.5 };
 }
 
-function findSettingsEntity(dimension: Dimension, terminalLoc: Vector3) {
-  return dimension.getEntities({ type: SETTINGS_ENTITY_TYPE, location: centerOf(terminalLoc), maxDistance: 2 })[0];
+function getOwnerLocation(entity: Entity): Vector3 | undefined {
+  const raw = entity.getDynamicProperty(OWNER_LOCATION_PROPERTY);
+  if (typeof raw !== "string") return undefined;
+  try {
+    return JSON.parse(raw) as Vector3;
+  } catch {
+    return undefined;
+  }
+}
+
+// dimension.getEntitiesは「近傍」の検索(maxDistanceによる球状の絞り込み)しかできず、
+// 「その座標そのもの」を厳密に取得するAPIが無い。そのため、まず近傍で候補を絞り込んだ上で、
+// 各エンティティが自己申告している所属ブロック座標(wh:owner_loc、spawnEntity直後に書き込む)
+// と厳密一致するものだけを採用する。これにより、隣接ブロック同士が近い場合でも、距離の
+// しきい値のチューニングに依存せず確実に正しいエンティティを取得できる(storageSettings.ts
+// と同根の不具合が実機で発見され、修正済み。詳細はdocs/design.md参照)。
+function findSettingsEntity(dimension: Dimension, terminalLoc: Vector3): Entity | undefined {
+  const candidates = dimension.getEntities({
+    type: SETTINGS_ENTITY_TYPE,
+    location: centerOf(terminalLoc),
+    maxDistance: 2,
+  });
+  return candidates.find((e) => {
+    const owner = getOwnerLocation(e);
+    return owner !== undefined && locEquals(owner, terminalLoc);
+  });
+}
+
+function ensureEntity(dimension: Dimension, terminalLoc: Vector3): Entity {
+  const existing = findSettingsEntity(dimension, terminalLoc);
+  if (existing) return existing;
+  const entity = dimension.spawnEntity(SETTINGS_ENTITY_TYPE, centerOf(terminalLoc));
+  entity.setDynamicProperty(OWNER_LOCATION_PROPERTY, JSON.stringify(terminalLoc));
+  return entity;
 }
 
 export function ensureSettingsEntity(dimension: Dimension, terminalLoc: Vector3): void {
-  if (findSettingsEntity(dimension, terminalLoc)) return;
-  dimension.spawnEntity(SETTINGS_ENTITY_TYPE, centerOf(terminalLoc));
+  ensureEntity(dimension, terminalLoc);
 }
 
 export function removeSettingsEntity(dimension: Dimension, terminalLoc: Vector3): void {
@@ -37,8 +69,7 @@ export function getNotifyOnComplete(dimension: Dimension, terminalLoc: Vector3):
 }
 
 export function setNotifyOnComplete(dimension: Dimension, terminalLoc: Vector3, value: boolean): void {
-  const entity = findSettingsEntity(dimension, terminalLoc) ?? dimension.spawnEntity(SETTINGS_ENTITY_TYPE, centerOf(terminalLoc));
-  entity.setDynamicProperty(NOTIFY_ON_COMPLETE_PROPERTY, value);
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(NOTIFY_ON_COMPLETE_PROPERTY, value);
 }
 
 // 通知等に表示するターミナルの名前。設置時に区別用の仮名が自動で入るほか、
@@ -49,8 +80,7 @@ export function getTerminalName(dimension: Dimension, terminalLoc: Vector3): str
 }
 
 export function setTerminalName(dimension: Dimension, terminalLoc: Vector3, name: string | undefined): void {
-  const entity = findSettingsEntity(dimension, terminalLoc) ?? dimension.spawnEntity(SETTINGS_ENTITY_TYPE, centerOf(terminalLoc));
-  entity.setDynamicProperty(NAME_PROPERTY, name && name.length > 0 ? name : undefined);
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(NAME_PROPERTY, name && name.length > 0 ? name : undefined);
 }
 
 // 自動端末の「維持したい在庫量」リスト。通常のターミナルは使わない。
@@ -65,8 +95,7 @@ export function getWishlist(dimension: Dimension, terminalLoc: Vector3): Wishlis
 }
 
 export function setWishlist(dimension: Dimension, terminalLoc: Vector3, wishlist: WishlistLine[]): void {
-  const entity = findSettingsEntity(dimension, terminalLoc) ?? dimension.spawnEntity(SETTINGS_ENTITY_TYPE, centerOf(terminalLoc));
-  entity.setDynamicProperty(WISHLIST_PROPERTY, JSON.stringify(wishlist));
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(WISHLIST_PROPERTY, JSON.stringify(wishlist));
 }
 
 // 自動端末の「自動預け入れ」設定。リストに無い、または目標を上回るアイテムがあれば
@@ -77,6 +106,5 @@ export function getAutoDeposit(dimension: Dimension, terminalLoc: Vector3): bool
 }
 
 export function setAutoDeposit(dimension: Dimension, terminalLoc: Vector3, value: boolean): void {
-  const entity = findSettingsEntity(dimension, terminalLoc) ?? dimension.spawnEntity(SETTINGS_ENTITY_TYPE, centerOf(terminalLoc));
-  entity.setDynamicProperty(AUTO_DEPOSIT_PROPERTY, value);
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(AUTO_DEPOSIT_PROPERTY, value);
 }

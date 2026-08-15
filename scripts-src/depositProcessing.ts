@@ -8,6 +8,7 @@ import {
 } from "./network";
 import { buildStorageIndex, insertIntoStorages } from "./storageScan";
 import { DepositLine, DepositRequest, generateId, locEquals, NetworkData, PartialResultLine } from "./state";
+import { getDrain } from "./storageSettings";
 import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 
 // 注文(orderProcessing.ts)と対称だが、方向が逆(ターミナルの張り付いた先 -> ネットワーク内の
@@ -37,6 +38,9 @@ export function processNetworkDeposits(network: NetworkData): void {
   // 重くなりすぎるため。スナップショットなので、このtick中に新しく届いた品目までは反映されないが、
   // 次のtickには自然に反映されるので実用上は問題ない。
   const storageIndex = buildStorageIndex(dimension, network);
+  // Drain指定されたストレージは預け入れ先として選ばれない(倉庫レンチのDrainモード参照)。
+  // これも品目ごとに問い合わせず、ネットワークにつき1tick1回だけ判定してリストにしておく。
+  const depositTargets = network.storages.filter((loc) => !getDrain(dimension, loc));
 
   while (budget > 0 && requests.length > 0) {
     const request = requests[0];
@@ -81,7 +85,8 @@ export function processNetworkDeposits(network: NetworkData): void {
       { typeId: line.itemTypeId, name: line.itemName },
       attempt,
       sourceContainer,
-      storageIndex
+      storageIndex,
+      depositTargets
     );
     line.delivered += inserted;
     budget -= inserted;

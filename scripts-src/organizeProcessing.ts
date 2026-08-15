@@ -2,6 +2,8 @@ import { Dimension, Vector3, world } from "@minecraft/server";
 import { DisplayKey, stackMatchesKey } from "./itemIdentity";
 import { getOrganizeQueue, setOrganizeQueue } from "./network";
 import { generateId, NetworkData, OrganizeRequest } from "./state";
+import { getDrain } from "./storageSettings";
+import { insertIntoStorages } from "./storageScan";
 
 // 倉庫の整理(注文/納入と同じくコントローラのタスク定期実行の仕組みに乗せる)。
 // MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
@@ -34,6 +36,11 @@ export function processNetworkOrganize(network: NetworkData): void {
   const request = queue[0];
   let budget = ORGANIZE_THROUGHPUT_PER_TICK;
 
+  // Drain指定の有無は、このtickのこのネットワーク分だけ1回判定して使い回す
+  // (depositProcessing.tsのdepositTargetsと同じ理由。品目ごとに問い合わせない)。
+  const drainLocs = network.storages.filter((loc) => getDrain(dimension, loc));
+  const regularLocs = network.storages.filter((loc) => !getDrain(dimension, loc));
+
   while (budget > 0) {
     const line = request.lines.find((l) => !l.done);
     if (!line) {
@@ -46,7 +53,9 @@ export function processNetworkOrganize(network: NetworkData): void {
       dimension,
       network,
       { typeId: line.itemTypeId, name: line.itemName },
-      budget
+      budget,
+      drainLocs,
+      regularLocs
     );
     budget -= moved;
     if (complete) line.done = true;
@@ -63,18 +72,39 @@ function containerAt(dimension: Dimension, loc: Vector3) {
 }
 
 // 指定キーのスタックをネットワーク内のストレージ群にわたって寄せ集め、部分スタックを減らす。
+// 2段階で処理する:
+//   1. Drain指定ストレージの中身を、非Drainストレージへ可能な限り退避する(空きが無ければ残る)。
+//   2. 非Drainストレージ同士で、部分スタックを寄せて空きスロットを増やす(Drain側は対象外、
+//      新たにDrain側へ何かが入ることは無い)。
 // 実際に積み重ね可能か(耐久値・エンチャント等の一致)は ItemStack.isStackableWith で判定するため、
 // 見た目のdisplayKeyが同じでも実際には積めない組(例: 耐久が違う剣同士)は無理にマージしない。
-// 呼び出しのたびに現在のコンテナの状態を再スキャンして先頭/末尾から寄せていくだけなので、
-// 予算切れで中断しても次回呼び出しは自然に続きから再開できる(専用の再開カーソルは持たない)。
+// 呼び出しのたびに現在のコンテナの状態を再スキャンして進めるだけなので、予算切れで中断しても
+// 次回呼び出しは自然に続きから再開できる(専用の再開カーソルは持たない)。
 function compactKeyInStorages(
   dimension: Dimension,
   network: NetworkData,
   key: DisplayKey,
-  budget: number
+  budget: number,
+  drainLocs: Vector3[],
+  regularLocs: Vector3[]
 ): { moved: number; complete: boolean } {
+  let moved = 0;
+  let remaining = budget;
+
+  // フェーズ1: Drain指定ストレージの退避。
+  for (const drainLoc of drainLocs) {
+    if (remaining <= 0) return { moved, complete: false };
+    const drainContainer = containerAt(dimension, drainLoc);
+    if (!drainContainer) continue;
+
+    const evacuated = insertIntoStorages(dimension, network, key, remaining, drainContainer, undefined, regularLocs);
+    moved += evacuated;
+    remaining -= evacuated;
+  }
+
+  // フェーズ2: 非Drainストレージ同士の圧縮。
   const slots: SlotRef[] = [];
-  for (const loc of network.storages) {
+  for (const loc of regularLocs) {
     const container = containerAt(dimension, loc);
     if (!container) continue;
     for (let i = 0; i < container.size; i++) {
@@ -83,7 +113,6 @@ function compactKeyInStorages(
     }
   }
 
-  let moved = 0;
   let dst = 0;
   let src = slots.length - 1;
 
@@ -109,9 +138,9 @@ function compactKeyInStorages(
       continue;
     }
 
-    if (budget <= 0) return { moved, complete: false };
+    if (remaining <= 0) return { moved, complete: false };
 
-    const take = Math.min(dstItem.maxAmount - dstItem.amount, srcItem.amount, budget);
+    const take = Math.min(dstItem.maxAmount - dstItem.amount, srcItem.amount, remaining);
     dstItem.amount += take;
     dstContainer.setItem(slots[dst].slot, dstItem);
 
@@ -124,7 +153,7 @@ function compactKeyInStorages(
     }
 
     moved += take;
-    budget -= take;
+    remaining -= take;
   }
 
   return { moved, complete: true };
