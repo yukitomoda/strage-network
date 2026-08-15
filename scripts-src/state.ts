@@ -72,26 +72,40 @@ export type DepositPartialResult = {
   shortfall: PartialResultLine[];
 };
 
+// 自動端末の「維持したい在庫量」リスト。ターミナルごとの設定として
+// terminalSettings.ts (非表示エンティティ)に保存する。
+export type WishlistLine = {
+  itemTypeId: string;
+  itemName?: string;
+  targetAmount: number;
+};
+
 export function generateId(): string {
   return `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
 }
 
-// 注文の表示用ID。マルチプレイでプレイヤーが自分の注文をチャット上で見分けられればよく、
-// 厳密な一意性は不要なので、短い英数字4桁にしている(36^4 ≈ 168万通り)。
-export function generateOrderId(): string {
-  return `TAK-${Math.floor(Math.random() * 36 ** 4)
+// 表示用IDの共通部分。マルチプレイでプレイヤーが自分の注文/ターミナルをチャット上で
+// 見分けられればよく、厳密な一意性は不要なので、短い英数字4桁にしている(36^4 ≈ 168万通り)。
+function generateShortCode(): string {
+  return Math.floor(Math.random() * 36 ** 4)
     .toString(36)
     .toUpperCase()
-    .padStart(4, "0")}`;
+    .padStart(4, "0");
 }
 
-// ターミナルの初期名。設定タブでいつでも変更できる前提の、区別のためだけの仮名なので
-// 一意性は不要。注文ID(素の4桁)とひと目で見分けられるよう、接頭辞を付けたフォーマットにする。
+// 注文の表示用ID。
+export function generateOrderId(): string {
+  return `TAK-${generateShortCode()}`;
+}
+
+// ターミナルの初期名。設定タブでいつでも変更できる前提の、区別のためだけの仮名。
+// 注文ID・自動端末の初期名とひと目で見分けられるよう接頭辞を変えている。
 export function generateTerminalName(): string {
-  return `TRM-${Math.floor(Math.random() * 36 ** 4)
-    .toString(36)
-    .toUpperCase()
-    .padStart(4, "0")}`;
+  return `TRM-${generateShortCode()}`;
+}
+
+export function generateAutoTerminalName(): string {
+  return `ATM-${generateShortCode()}`;
 }
 
 export function locEquals(a: Vector3, b: Vector3): boolean {

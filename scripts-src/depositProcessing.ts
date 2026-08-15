@@ -8,7 +8,7 @@ import {
 } from "./network";
 import { buildStorageIndex, insertIntoStorages } from "./storageScan";
 import { DepositLine, DepositRequest, generateId, locEquals, NetworkData, PartialResultLine } from "./state";
-import { getAttachedStorageLocation } from "./terminalBlock";
+import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 
 // 注文(orderProcessing.ts)と対称だが、方向が逆(ターミナルの張り付いた先 -> ネットワーク内の
 // ストレージ群)で、スループット・発行遅延は個別に設定できるようにしている。
@@ -59,7 +59,7 @@ export function processNetworkDeposits(network: NetworkData): void {
     }
 
     const terminalBlock = dimension.getBlock(request.terminal);
-    if (!terminalBlock?.isValid || terminalBlock.typeId !== "wh:terminal") {
+    if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
       // 登録はあるが今はブロックを取得できない(チャンク未読み込み等)。次tickに再試行する。
       break;
     }

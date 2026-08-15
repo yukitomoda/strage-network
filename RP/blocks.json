@@ -5,5 +5,8 @@
   },
   "wh:terminal": {
     "sound": "wood"
+  },
+  "wh:auto_terminal": {
+    "sound": "wood"
   }
 }

@@ -1,4 +1,4 @@
-import { Block, BlockCustomComponent, Vector3 } from "@minecraft/server";
+import { Block, BlockCustomComponent, Dimension, Vector3 } from "@minecraft/server";
 import { findMembership, removeTerminal } from "./network";
 import { generateTerminalName } from "./state";
 import { ensureSettingsEntity, removeSettingsEntity, setTerminalName } from "./terminalSettings";
@@ -6,6 +6,23 @@ import { showOrderUi } from "./terminalUi";
 
 export const TERMINAL_BLOCK_ID = "wh:terminal";
 export const TERMINAL_COMPONENT_ID = "wh:terminal";
+export const AUTO_TERMINAL_BLOCK_ID = "wh:auto_terminal";
+
+// 注文・納入キュー処理、レンチでの接続対象など、「ターミナルとして扱ってよいブロックか」の判定を
+// 一箇所にまとめる。通常のターミナルと自動端末はどちらも対象。
+export function isTerminalLikeBlock(typeId: string): boolean {
+  return typeId === TERMINAL_BLOCK_ID || typeId === AUTO_TERMINAL_BLOCK_ID;
+}
+
+// onPlayerBreak の共通処理(設定エンティティの削除+ネットワークからの除去)。
+// 通常のターミナル/自動端末の両方から呼ばれる。
+export function teardownTerminal(dimension: Dimension, loc: Vector3): void {
+  removeSettingsEntity(dimension, loc);
+  const membership = findMembership(dimension.id, loc);
+  if (membership && membership.role === "terminal") {
+    removeTerminal(membership.network.id, loc);
+  }
+}
 
 const FACING_STATE = "minecraft:block_face";
 
@@ -44,12 +61,7 @@ export const terminalBlockComponent: BlockCustomComponent = {
     setTerminalName(dimension, block.location, generateTerminalName());
   },
   onPlayerBreak(event) {
-    const { block, dimension } = event;
-    removeSettingsEntity(dimension, block.location);
-    const membership = findMembership(dimension.id, block.location);
-    if (membership && membership.role === "terminal") {
-      removeTerminal(membership.network.id, block.location);
-    }
+    teardownTerminal(event.dimension, event.block.location);
   },
   onPlayerInteract(event) {
     const player = event.player;

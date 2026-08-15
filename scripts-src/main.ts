@@ -1,4 +1,6 @@
 import { system } from "@minecraft/server";
+import { autoTerminalBlockComponent } from "./autoTerminalBlock";
+import { startAutoTerminalCheckLoop } from "./autoOrderCheck";
 import { controllerBlockComponent } from "./controllerBlock";
 import { startNetworkProcessingLoop } from "./networkProcessing";
 import { registerStorageBreakWatcher } from "./storageLifecycle";
@@ -9,6 +11,7 @@ import { startWrenchHighlightLoop, wrenchItemComponent } from "./wrench";
 system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRegistry }) => {
   blockComponentRegistry.registerCustomComponent("wh:controller", controllerBlockComponent);
   blockComponentRegistry.registerCustomComponent("wh:terminal", terminalBlockComponent);
+  blockComponentRegistry.registerCustomComponent("wh:auto_terminal", autoTerminalBlockComponent);
   itemComponentRegistry.registerCustomComponent("wh:wrench", wrenchItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:test_filler", testFillerItemComponent);
 });
@@ -16,3 +19,4 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRe
 registerStorageBreakWatcher();
 startNetworkProcessingLoop();
 startWrenchHighlightLoop();
+startAutoTerminalCheckLoop();

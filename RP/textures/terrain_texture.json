@@ -7,6 +7,9 @@
     },
     "wh:terminal": {
       "textures": "textures/blocks/terminal"
+    },
+    "wh:auto_terminal": {
+      "textures": "textures/blocks/auto_terminal"
     }
   }
 }

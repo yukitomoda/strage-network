@@ -50,6 +50,13 @@ function terminalColorAt(u, v) {
   return [90, 90, 95, 255];
 }
 
+// 自動引き出しターミナル: 通常のターミナルと同じ構図だが、画面がオレンジ系で見分けが付く
+function autoTerminalColorAt(u, v) {
+  const inScreen = u >= 0.2 && u <= 0.8 && v >= 0.25 && v <= 0.75;
+  if (inScreen) return [230, 165, 70, 255];
+  return [90, 90, 95, 255];
+}
+
 // レンチアイテム: 透過背景に単純な十字(スパナ風)アイコン
 function wrenchColorAt(u, v) {
   const dx = u - 0.5;
@@ -107,6 +114,7 @@ function writePng(outPath, size, colorAt) {
 
 writePng("RP/textures/blocks/controller.png", 16, controllerColorAt);
 writePng("RP/textures/blocks/terminal.png", 16, terminalColorAt);
+writePng("RP/textures/blocks/auto_terminal.png", 16, autoTerminalColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);
 writePng("BP/pack_icon.png", 128, packIconColorAt);

@@ -28,7 +28,8 @@ type CartLine = {
 
 // カスタム名(nameTag)があればそのまま表示、無ければ localizationKey をクライアントの
 // langファイルで解決してもらう(自前の翻訳テーブルは持たない。docs/design.md 5章参照)。
-function catalogEntryMessage(entry: CatalogEntry): UIRawMessage {
+// autoTerminalUi.ts のウィッシュリスト検索結果表示でも使うため export する。
+export function catalogEntryMessage(entry: CatalogEntry): UIRawMessage {
   const namePart: UIRawMessage = entry.key.name ? { text: entry.key.name } : { translate: entry.localizationKey };
   return { rawtext: [namePart, { text: ` (在庫${entry.total})` }] };
 }

@@ -8,6 +8,7 @@ import {
   toggleTerminal,
 } from "./network";
 import { locEquals } from "./state";
+import { isTerminalLikeBlock } from "./terminalBlock";
 
 const EDITING_NETWORK_PROPERTY = "wh:editing_network";
 const HIGHLIGHT_INTERVAL = 10;
@@ -55,7 +56,7 @@ export const wrenchItemComponent: ItemCustomComponent = {
       return;
     }
 
-    if (block.typeId === "wh:terminal") {
+    if (isTerminalLikeBlock(block.typeId)) {
       const result = toggleTerminal(editingNetworkId, block.location);
       player.sendMessage(result === "connected" ? "§bターミナルを接続しました。" : "§eターミナルを切断しました。");
       return;

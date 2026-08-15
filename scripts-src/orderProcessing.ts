@@ -2,7 +2,7 @@ import { Dimension, system, Vector3, world } from "@minecraft/server";
 import { appendPartial, getIssuing, getOrders, setIssuing, setOrders } from "./network";
 import { extractFromStorages } from "./storageScan";
 import { generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
-import { getAttachedStorageLocation } from "./terminalBlock";
+import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
 
 // MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
@@ -52,7 +52,7 @@ export function processNetworkOrders(network: NetworkData): void {
     }
 
     const terminalBlock = dimension.getBlock(order.terminal);
-    if (!terminalBlock?.isValid || terminalBlock.typeId !== "wh:terminal") {
+    if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
       // 登録はあるが、今はブロックを取得できない(チャンク未読み込み等)。今回はここで諦めて
       // 次tickに再試行する(FIFOを守るため、後続の注文の処理には進まない)。
       break;
