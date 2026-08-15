@@ -1,5 +1,7 @@
 import { Block, BlockCustomComponent, Vector3 } from "@minecraft/server";
 import { findMembership, removeTerminal } from "./network";
+import { generateTerminalName } from "./state";
+import { ensureSettingsEntity, removeSettingsEntity, setTerminalName } from "./terminalSettings";
 import { showOrderUi } from "./terminalUi";
 
 export const TERMINAL_BLOCK_ID = "wh:terminal";
@@ -35,8 +37,15 @@ export function getAttachedStorageLocation(block: Block): Vector3 {
 }
 
 export const terminalBlockComponent: BlockCustomComponent = {
+  onPlace(event) {
+    const { block, dimension } = event;
+    ensureSettingsEntity(dimension, block.location);
+    // 設定タブでいつでも変えられる前提の、区別のためだけのデフォルト名。
+    setTerminalName(dimension, block.location, generateTerminalName());
+  },
   onPlayerBreak(event) {
     const { block, dimension } = event;
+    removeSettingsEntity(dimension, block.location);
     const membership = findMembership(dimension.id, block.location);
     if (membership && membership.role === "terminal") {
       removeTerminal(membership.network.id, block.location);

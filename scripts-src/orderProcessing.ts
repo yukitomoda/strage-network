@@ -1,20 +1,23 @@
-import { system, Vector3, world } from "@minecraft/server";
+import { Dimension, system, Vector3, world } from "@minecraft/server";
 import { appendPartial, getIssuing, getOrders, setIssuing, setOrders } from "./network";
 import { extractFromStorages } from "./storageScan";
-import { generateId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
+import { generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
 import { getAttachedStorageLocation } from "./terminalBlock";
+import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
 
 // MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
 // docs/design.md 4章「スループット制」参照。
-const THROUGHPUT_PER_TICK = 1_000_000;
+const THROUGHPUT_PER_TICK = 1_0;
 // MVP: 発行遅延なし。将来はターミナルのグレードに応じて可変にする。
 const ISSUE_DELAY_TICKS = 0;
 
-export function submitOrder(networkId: string, terminalLoc: Vector3, lines: OrderLine[]): void {
-  const order: Order = { id: generateId(), terminal: terminalLoc, lines };
+// 戻り値の id はプレイヤーへの表示用(注文確定時のメッセージ、完了通知に使う)。
+export function submitOrder(networkId: string, terminalLoc: Vector3, playerName: string, lines: OrderLine[]): string {
+  const order: Order = { id: generateOrderId(), playerName, terminal: terminalLoc, lines };
   const entries = getIssuing(networkId);
   entries.push({ order, readyAtTick: system.currentTick + ISSUE_DELAY_TICKS });
   setIssuing(networkId, entries);
+  return order.id;
 }
 
 export function processNetworkOrders(network: NetworkData): void {
@@ -30,7 +33,7 @@ export function processNetworkOrders(network: NetworkData): void {
     const line = order.lines.find((l) => !l.exhausted && l.delivered < l.requested);
 
     if (!line) {
-      finalizeOrder(network.id, order);
+      finalizeOrder(network, dimension, order);
       orders = orders.slice(1);
       setOrders(network.id, orders);
       continue;
@@ -42,7 +45,7 @@ export function processNetworkOrders(network: NetworkData): void {
     // (実機で、これが原因で処理中の注文が誤って消えることを確認済み)。
     const stillRegistered = network.terminals.some((t) => locEquals(t, order.terminal));
     if (!stillRegistered) {
-      finalizeOrder(network.id, order);
+      finalizeOrder(network, dimension, order);
       orders = orders.slice(1);
       setOrders(network.id, orders);
       continue;
@@ -60,7 +63,7 @@ export function processNetworkOrders(network: NetworkData): void {
     const destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
     if (!destContainer) {
       // 張り付いた先にコンテナが無い: 全ラインが不足として記録される
-      finalizeOrder(network.id, order);
+      finalizeOrder(network, dimension, order);
       orders = orders.slice(1);
       setOrders(network.id, orders);
       continue;
@@ -101,12 +104,28 @@ function moveReadyIssuingEntries(network: NetworkData): void {
   setOrders(network.id, orders);
 }
 
-function finalizeOrder(networkId: string, order: Order): void {
+function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order): void {
   const shortfall: PartialResultLine[] = order.lines
     .filter((l) => l.delivered < l.requested)
     .map((l) => ({ itemTypeId: l.itemTypeId, itemName: l.itemName, amount: l.requested - l.delivered }));
 
   if (shortfall.length > 0) {
-    appendPartial(networkId, { orderId: order.id, terminal: order.terminal, shortfall });
+    appendPartial(network.id, { orderId: order.id, terminal: order.terminal, shortfall });
   }
+
+  // ターミナルごとの設定(通知の有無)は非表示エンティティ側に持たせている(terminalSettings.ts)。
+  // ターミナルが切断/破壊済みでエンティティが無い場合はデフォルト(true)扱いになる。
+  if (!getNotifyOnComplete(dimension, order.terminal)) return;
+
+  const player = world.getPlayers().find((p) => p.name === order.playerName);
+  if (!player) return; // オフライン等。ログイン中の通知のみサポート(MVP)
+
+  const terminalName = getTerminalName(dimension, order.terminal);
+  const namePrefix = terminalName ? `「${terminalName}」の` : "";
+
+  player.sendMessage(
+    shortfall.length > 0
+      ? `§e${namePrefix}注文 #${order.id} の受け取り準備ができました(一部品切れで届かなかった品があります)。`
+      : `§b${namePrefix}注文 #${order.id} の受け取り準備ができました。`
+  );
 }

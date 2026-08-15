@@ -2,6 +2,9 @@ import { Vector3, world } from "@minecraft/server";
 
 // ネットワークの構造情報。world の動的プロパティに JSON として保存する。
 // (ブロックは動的プロパティを持てないため。詳細は docs/design.md 2章参照)
+// terminals は所属情報(座標)のみ。ターミナルごとの設定は、これとは別に非表示エンティティ
+// (terminalSettings.ts)に持たせる。設定項目が増えてもネットワーク全体のJSONを肥大化させず、
+// その1台分の読み書きだけで完結させるため。
 export type NetworkData = {
   id: string;
   dimensionId: string;
@@ -19,7 +22,8 @@ export type OrderLine = {
 };
 
 export type Order = {
-  id: string;
+  id: string; // 短い表示用ID。マルチプレイでの識別用途なので厳密な一意性は不要
+  playerName: string; // 完了通知の送り先を後から探すため(Entity.idはセッションをまたいで安定しない)
   terminal: Vector3;
   lines: OrderLine[];
 };
@@ -70,6 +74,24 @@ export type DepositPartialResult = {
 
 export function generateId(): string {
   return `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+}
+
+// 注文の表示用ID。マルチプレイでプレイヤーが自分の注文をチャット上で見分けられればよく、
+// 厳密な一意性は不要なので、短い英数字4桁にしている(36^4 ≈ 168万通り)。
+export function generateOrderId(): string {
+  return `PUL-${Math.floor(Math.random() * 36 ** 4)
+    .toString(36)
+    .toUpperCase()
+    .padStart(4, "0")}`;
+}
+
+// ターミナルの初期名。設定タブでいつでも変更できる前提の、区別のためだけの仮名なので
+// 一意性は不要。注文ID(素の4桁)とひと目で見分けられるよう、接頭辞を付けたフォーマットにする。
+export function generateTerminalName(): string {
+  return `TRM-${Math.floor(Math.random() * 36 ** 4)
+    .toString(36)
+    .toUpperCase()
+    .padStart(4, "0")}`;
 }
 
 export function locEquals(a: Vector3, b: Vector3): boolean {

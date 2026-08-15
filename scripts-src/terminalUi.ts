@@ -1,4 +1,4 @@
-import { Block, Container, Player, Vector3 } from "@minecraft/server";
+import { Block, Container, Dimension, Player, Vector3 } from "@minecraft/server";
 import {
   CustomForm,
   ObservableBoolean,
@@ -12,6 +12,7 @@ import { submitDeposit } from "./depositProcessing";
 import { submitOrder } from "./orderProcessing";
 import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
 import { getAttachedStorageLocation } from "./terminalBlock";
+import { getNotifyOnComplete, getTerminalName, setNotifyOnComplete, setTerminalName } from "./terminalSettings";
 import { DepositLine } from "./state";
 
 const ROW_COUNT = 8;
@@ -36,7 +37,6 @@ function catalogEntryMessage(entry: CatalogEntry): UIRawMessage {
 // タブの切り替えは全コントロールを visible で出し分けるだけ(DDUIにタブ専用の部品は無いため)。
 function setupTab(
   form: CustomForm,
-  player: Player,
   tabVisible: ObservableBoolean,
   catalog: CatalogEntry[],
   cartLabelPrefix: string,
@@ -128,7 +128,6 @@ function setupTab(
       cart.length = 0;
       refreshCartLabel();
       form.close();
-      player.sendMessage("§b倉庫ネットワークへ送信しました。");
     },
     { visible: tabVisible }
   );
@@ -199,6 +198,35 @@ function setupDepositTab(
   );
 }
 
+// 設定タブ: ターミナルごとのローカル設定(現状は完了通知の有無のみ)。ブロック自体は
+// 状態を持てないため、非表示エンティティ側に持たせている(terminalSettings.ts参照)。
+function setupSettingsTab(
+  form: CustomForm,
+  tabVisible: ObservableBoolean,
+  dimension: Dimension,
+  terminalLoc: Vector3,
+  initialNotifyOnComplete: boolean,
+  initialName: string
+): void {
+  const notifyOnComplete = new ObservableBoolean(initialNotifyOnComplete, { clientWritable: true });
+  notifyOnComplete.subscribe((value) => {
+    setNotifyOnComplete(dimension, terminalLoc, value);
+  });
+
+  const name = new ObservableString(initialName, { clientWritable: true });
+  name.subscribe((value) => {
+    setTerminalName(dimension, terminalLoc, value);
+  });
+
+  form.label("このターミナルだけのローカル設定です。", { visible: tabVisible });
+  form.divider({ visible: tabVisible });
+  form.textField("名前", name, {
+    description: "注文発行時/配送完了時の通知に表示されます。",
+    visible: tabVisible,
+  });
+  form.toggle("注文の配送完了時に通知を表示する", notifyOnComplete, { visible: tabVisible });
+}
+
 export function showOrderUi(player: Player, block: Block): void {
   const dimension = block.dimension;
   const membership = findMembership(dimension.id, block.location);
@@ -212,25 +240,40 @@ export function showOrderUi(player: Player, block: Block): void {
   const attachedLoc = getAttachedStorageLocation(block);
   const attachedContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
 
+  const terminalName = getTerminalName(dimension, block.location);
+  const namePrefix = terminalName ? `「${terminalName}」の` : "";
+
   const isOrderTab = new ObservableBoolean(true);
   const isDepositTab = new ObservableBoolean(false);
+  const isSettingsTab = new ObservableBoolean(false);
 
-  const form = new CustomForm(player, "倉庫端末");
-  form.button("注文", () => {
-    isOrderTab.setData(true);
-    isDepositTab.setData(false);
-  }, { disabled: isOrderTab });
-  form.button("納入", () => {
-    isOrderTab.setData(false);
-    isDepositTab.setData(true);
-  }, { disabled: isDepositTab });
+  function selectTab(tab: "order" | "deposit" | "settings"): void {
+    isOrderTab.setData(tab === "order");
+    isDepositTab.setData(tab === "deposit");
+    isSettingsTab.setData(tab === "settings");
+  }
+
+  const form = new CustomForm(player, terminalName ? `倉庫端末: ${terminalName}` : "倉庫端末");
+  form.button("注文", () => selectTab("order"), { disabled: isOrderTab });
+  form.button("納入", () => selectTab("deposit"), { disabled: isDepositTab });
+  form.button("設定", () => selectTab("settings"), { disabled: isSettingsTab });
   form.divider();
 
-  setupTab(form, player, isOrderTab, orderCatalog, "カート", "注文確定", (lines) => {
-    submitOrder(network.id, block.location, lines);
+  setupTab(form, isOrderTab, orderCatalog, "カート", "注文確定", (lines) => {
+    const orderId = submitOrder(network.id, block.location, player.name, lines);
+    player.sendMessage(`§b${namePrefix}注文 #${orderId} をネットワークへ送信しました。`);
   });
 
   setupDepositTab(form, player, isDepositTab, attachedContainer, network.id, block.location);
+
+  setupSettingsTab(
+    form,
+    isSettingsTab,
+    dimension,
+    block.location,
+    getNotifyOnComplete(dimension, block.location),
+    terminalName ?? ""
+  );
 
   form.show().catch((e) => console.error(e));
 }
