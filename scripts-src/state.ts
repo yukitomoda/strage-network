@@ -90,6 +90,7 @@ export type OrganizeLine = {
 
 export type OrganizeRequest = {
   id: string;
+  playerName: string; // 完了通知の送り先を後から探すため(Order.playerNameと同じ考え方)
   lines: OrganizeLine[];
 };
 

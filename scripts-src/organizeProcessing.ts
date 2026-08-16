@@ -1,4 +1,5 @@
 import { Dimension, Vector3, world } from "@minecraft/server";
+import { getNotifyOnOrganizeComplete } from "./controllerSettings";
 import { DisplayKey, stackMatchesKey } from "./itemIdentity";
 import { getOrganizeQueue, setOrganizeQueue } from "./network";
 import { generateId, NetworkData, OrganizeLine, OrganizeRequest } from "./state";
@@ -15,6 +16,7 @@ const ORGANIZE_THROUGHPUT_PER_TICK = 100;
 // ワンショットの処理で、キューに複数積んでも得るものが無いため)。
 export function submitOrganize(
   networkId: string,
+  playerName: string,
   lines: { itemTypeId: string; itemName?: string }[]
 ): boolean {
   if (lines.length === 0) return false;
@@ -22,6 +24,7 @@ export function submitOrganize(
 
   const request: OrganizeRequest = {
     id: generateId(),
+    playerName,
     lines: lines.map((l) => ({ itemTypeId: l.itemTypeId, itemName: l.itemName, done: false })),
   };
   setOrganizeQueue(networkId, [request]);
@@ -95,7 +98,35 @@ export function processNetworkOrganize(network: NetworkData): void {
   if (request.lines.every((l) => l.done)) {
     queue = queue.slice(1);
     setOrganizeQueue(network.id, queue);
+    notifyOrganizeComplete(dimension, network, request, drainLocs);
   }
+}
+
+// 完了通知(設定タブの「整理完了時に通知する」がONの場合のみ)。「本当に全品目を退避しきれた
+// か、それとも(空き不足で)一部を諦めたか」は専用のフラグを持たせず、完了時点で改めて
+// Drain指定ストレージの中にリクエスト対象の品目が残っているかを調べることで判定する
+// (諦めたラインだけが検知漏れなくここに反映される。orderProcessing.tsのfinalizeOrderの
+// shortfallと同じ考え方)。
+function notifyOrganizeComplete(
+  dimension: Dimension,
+  network: NetworkData,
+  request: OrganizeRequest,
+  drainLocs: Vector3[]
+): void {
+  if (!getNotifyOnOrganizeComplete(dimension, network.controller)) return;
+
+  const player = world.getPlayers().find((p) => p.name === request.playerName);
+  if (!player) return; // オフライン等。ログイン中の通知のみサポート(MVP)
+
+  const leftover = request.lines.some((l) =>
+    anyMatchingItem(dimension, drainLocs, { typeId: l.itemTypeId, name: l.itemName })
+  );
+
+  player.sendMessage(
+    leftover
+      ? "§e倉庫の整理が完了しました(退避先の空き不足で一部の品目は整理できませんでした)。"
+      : "§b倉庫の整理が完了しました。"
+  );
 }
 
 type SlotRef = { loc: Vector3; slot: number };

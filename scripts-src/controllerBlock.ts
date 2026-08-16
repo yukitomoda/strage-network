@@ -1,4 +1,5 @@
 import { BlockCustomComponent } from "@minecraft/server";
+import { removeSettingsEntity } from "./controllerSettings";
 import { showControllerUi } from "./controllerUi";
 import { createNetwork, destroyNetwork, findNetworkByController } from "./network";
 
@@ -15,6 +16,7 @@ export const controllerBlockComponent: BlockCustomComponent = {
     const network = findNetworkByController(dimension.id, block.location);
     if (!network) return;
     destroyNetwork(network.id);
+    removeSettingsEntity(dimension, block.location);
     player?.sendMessage("§e倉庫ネットワークを解体しました。");
   },
   onPlayerInteract(event) {

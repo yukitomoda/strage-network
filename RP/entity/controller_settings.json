@@ -1,0 +1,12 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "wh:controller_settings",
+      "materials": { "default": "entity_alphatest" },
+      "textures": { "default": "textures/blocks/controller" },
+      "geometry": { "default": "geometry.controller_settings" },
+      "render_controllers": ["controller.render.controller_settings"]
+    }
+  }
+}
