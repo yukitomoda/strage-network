@@ -32,10 +32,32 @@ export function submitOrder(networkId: string, terminalLoc: Vector3, playerName:
 }
 
 // コントローラの「状況」タブ(controllerUi.ts)向け: 発行待ち(issuing)・処理中(orders)を
-// 合わせた「まだ完了していない引き出し」一覧。hasPendingOrderFor(autoOrderCheck.ts)と
-// 同じ「両方見る」考え方。
+// 合わせた「まだ完了していない引き出し」一覧。hasPendingOrderForと同じ「両方見る」考え方。
 export function listActiveOrders(networkId: string): Order[] {
   return [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
+}
+
+// 直前のチェックで出した引き出しがまだ処理中(発行待ち含む)なら、同じ品目を二重に引き出し
+// しないための判定。自動端末(autoOrderCheck.ts)・在庫管理ターミナル(inventoryCheck.ts)の
+// どちらの定期チェックからも使う共通処理なのでここに置いている。
+export function hasPendingOrderFor(
+  networkId: string,
+  terminalLoc: Vector3,
+  itemTypeId: string,
+  itemName: string | undefined
+): boolean {
+  const pendingOrders = [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
+  return pendingOrders.some(
+    (order) =>
+      locEquals(order.terminal, terminalLoc) &&
+      order.lines.some(
+        (line) =>
+          line.itemTypeId === itemTypeId &&
+          (line.itemName ?? "") === (itemName ?? "") &&
+          !line.exhausted &&
+          line.delivered < line.requested
+      )
+  );
 }
 
 // requestId(厳密な一意ID。表示用の緩いidとは別物)を指定して引き出しをキャンセルする。

@@ -1,5 +1,5 @@
 import { Dimension, Entity, Vector3 } from "@minecraft/server";
-import { locEquals, WishlistLine } from "./state";
+import { locEquals, StockTargetLine, WishlistLine } from "./state";
 
 // ターミナルごとのローカル設定を保持する非表示エンティティ。ブロックには動的プロパティを
 // 持たせられないため(docs/design.md 2章参照)。network.terminals(所属情報)とは意図的に
@@ -12,7 +12,9 @@ const SETTINGS_ENTITY_TYPE = "wh:terminal_settings";
 const NOTIFY_ON_COMPLETE_PROPERTY = "wh:notify_on_complete";
 const NAME_PROPERTY = "wh:name";
 const WISHLIST_PROPERTY = "wh:wishlist";
+const STOCK_TARGETS_PROPERTY = "wh:stock_targets";
 const AUTO_DEPOSIT_PROPERTY = "wh:auto_deposit";
+const INVENTORY_AUTO_DEPOSIT_PROPERTY = "wh:inventory_auto_deposit";
 const OWNER_LOCATION_PROPERTY = "wh:owner_loc";
 
 function centerOf(loc: Vector3): Vector3 {
@@ -98,6 +100,21 @@ export function setWishlist(dimension: Dimension, terminalLoc: Vector3, wishlist
   ensureEntity(dimension, terminalLoc).setDynamicProperty(WISHLIST_PROPERTY, JSON.stringify(wishlist));
 }
 
+// 在庫管理ターミナルの「維持したいネットワーク在庫数」リスト。他のターミナルは使わない。
+export function getStockTargets(dimension: Dimension, terminalLoc: Vector3): StockTargetLine[] {
+  const raw = findSettingsEntity(dimension, terminalLoc)?.getDynamicProperty(STOCK_TARGETS_PROPERTY);
+  if (typeof raw !== "string") return [];
+  try {
+    return JSON.parse(raw) as StockTargetLine[];
+  } catch {
+    return [];
+  }
+}
+
+export function setStockTargets(dimension: Dimension, terminalLoc: Vector3, targets: StockTargetLine[]): void {
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(STOCK_TARGETS_PROPERTY, JSON.stringify(targets));
+}
+
 // 自動端末の「自動預け入れ」設定。リストに無い、または目標を上回るアイテムがあれば
 // 自動でネットワークへ預け入れる。
 export function getAutoDeposit(dimension: Dimension, terminalLoc: Vector3): boolean {
@@ -107,4 +124,17 @@ export function getAutoDeposit(dimension: Dimension, terminalLoc: Vector3): bool
 
 export function setAutoDeposit(dimension: Dimension, terminalLoc: Vector3, value: boolean): void {
   ensureEntity(dimension, terminalLoc).setDynamicProperty(AUTO_DEPOSIT_PROPERTY, value);
+}
+
+// 在庫管理ターミナルの「自動預け入れ」設定。自動端末のAUTO_DEPOSIT_PROPERTYとは意味が狭く
+// (在庫目標を上回った分の扱いは常時有効の在庫管理ロジック側で既に行っているため)、
+// 「リストに無いアイテムをアタッチ先から一掃するか」だけを指す。デフォルトは自動端末と違い
+// false(意図せずアタッチ先の物を全部持っていかれる事故を避けるため、明示的にONにする方式)。
+export function getInventoryAutoDeposit(dimension: Dimension, terminalLoc: Vector3): boolean {
+  const value = findSettingsEntity(dimension, terminalLoc)?.getDynamicProperty(INVENTORY_AUTO_DEPOSIT_PROPERTY);
+  return typeof value === "boolean" ? value : false; // デフォルトfalse
+}
+
+export function setInventoryAutoDeposit(dimension: Dimension, terminalLoc: Vector3, value: boolean): void {
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(INVENTORY_AUTO_DEPOSIT_PROPERTY, value);
 }

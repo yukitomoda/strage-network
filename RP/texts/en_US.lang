@@ -1,6 +1,7 @@
 tile.wh:controller.name=Warehouse Controller
 tile.wh:terminal.name=Warehouse Terminal
 tile.wh:auto_terminal.name=Auto Terminal
+tile.wh:inventory_terminal.name=Inventory Terminal
 item.wh:wrench=Warehouse Wrench
 item.wh:test_filler=[Test] Random Filler
 pack.name=Warehouse Addon - Resource Pack

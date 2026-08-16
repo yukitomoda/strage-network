@@ -7,11 +7,12 @@ import { showOrderUi } from "./terminalUi";
 export const TERMINAL_BLOCK_ID = "wh:terminal";
 export const TERMINAL_COMPONENT_ID = "wh:terminal";
 export const AUTO_TERMINAL_BLOCK_ID = "wh:auto_terminal";
+export const INVENTORY_TERMINAL_BLOCK_ID = "wh:inventory_terminal";
 
 // 引き出し・預け入れキュー処理、レンチでの接続対象など、「ターミナルとして扱ってよいブロックか」の判定を
-// 一箇所にまとめる。通常のターミナルと自動端末はどちらも対象。
+// 一箇所にまとめる。通常のターミナル・自動端末・在庫管理ターミナルのいずれも対象。
 export function isTerminalLikeBlock(typeId: string): boolean {
-  return typeId === TERMINAL_BLOCK_ID || typeId === AUTO_TERMINAL_BLOCK_ID;
+  return typeId === TERMINAL_BLOCK_ID || typeId === AUTO_TERMINAL_BLOCK_ID || typeId === INVENTORY_TERMINAL_BLOCK_ID;
 }
 
 // onPlayerBreak の共通処理(設定エンティティの削除+ネットワークからの除去)。

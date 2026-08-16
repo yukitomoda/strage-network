@@ -83,6 +83,16 @@ export type WishlistLine = {
   targetAmount: number;
 };
 
+// 在庫管理ターミナルの「維持したいネットワーク在庫数」リスト。WishlistLineと構造は同じだが
+// 意味が違う: WishlistLineの目標は「このターミナルのアタッチ先に置いておきたい量」なのに対し、
+// こちらは「ネットワーク全体で維持したい在庫数」。混同を避けるため別の型・別の動的プロパティ
+// キー(terminalSettings.tsのwh:stock_targets)として持たせている。
+export type StockTargetLine = {
+  itemTypeId: string;
+  itemName?: string;
+  targetAmount: number;
+};
+
 // 倉庫の整理(コントローラのタスク定期実行の仕組みに乗せる)。引き出し/預け入れと違い搬入出先が
 // 無く、対象は「そのリクエストを作った時点でネットワークに存在した品目一覧」のスナップショット。
 export type OrganizeLine = {
@@ -134,6 +144,10 @@ export function generateTerminalName(): string {
 
 export function generateAutoTerminalName(): string {
   return `ATM-${generateShortCode()}`;
+}
+
+export function generateInventoryTerminalName(): string {
+  return `INV-${generateShortCode()}`;
 }
 
 export function locEquals(a: Vector3, b: Vector3): boolean {

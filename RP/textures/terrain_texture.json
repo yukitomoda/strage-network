@@ -10,6 +10,9 @@
     },
     "wh:auto_terminal": {
       "textures": "textures/blocks/auto_terminal"
+    },
+    "wh:inventory_terminal": {
+      "textures": "textures/blocks/inventory_terminal"
     }
   }
 }

@@ -8,5 +8,8 @@
   },
   "wh:auto_terminal": {
     "sound": "wood"
+  },
+  "wh:inventory_terminal": {
+    "sound": "wood"
   }
 }

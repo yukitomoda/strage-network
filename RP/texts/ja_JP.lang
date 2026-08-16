@@ -1,6 +1,7 @@
 tile.wh:controller.name=倉庫コントローラ
 tile.wh:terminal.name=倉庫ターミナル
 tile.wh:auto_terminal.name=自動端末
+tile.wh:inventory_terminal.name=在庫管理ターミナル
 item.wh:wrench=倉庫レンチ
 item.wh:test_filler=[テスト用] ランダム充填ツール
 pack.name=倉庫アドオン - リソースパック

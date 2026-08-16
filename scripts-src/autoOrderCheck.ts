@@ -1,11 +1,11 @@
 import { system, Vector3, world } from "@minecraft/server";
-import { submitDeposit } from "./depositProcessing";
-import { getAllNetworks, getDepositIssuing, getDeposits, getIssuing, getOrders } from "./network";
-import { submitOrder } from "./orderProcessing";
+import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
+import { getAllNetworks } from "./network";
+import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { CatalogEntry, scanContainerCatalog } from "./storageScan";
 import { AUTO_TERMINAL_BLOCK_ID, getAttachedStorageLocation } from "./terminalBlock";
 import { getAutoDeposit, getWishlist } from "./terminalSettings";
-import { DepositLine, locEquals, NetworkData, OrderLine, WishlistLine } from "./state";
+import { DepositLine, NetworkData, OrderLine, WishlistLine } from "./state";
 
 // MVP: 固定値(5秒)。将来はコントローラ/ターミナルのグレードに応じて可変にする。
 // docs/design.md 4章「スループット制」と同様の考え方。
@@ -108,49 +108,4 @@ function checkExcess(
   if (lines.length > 0) {
     submitDeposit(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, lines);
   }
-}
-
-// 直前のチェックで出した引き出しがまだ処理中(発行待ち含む)なら、同じ品目を二重に引き出ししない。
-function hasPendingOrderFor(
-  networkId: string,
-  terminalLoc: Vector3,
-  itemTypeId: string,
-  itemName: string | undefined
-): boolean {
-  const pendingOrders = [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
-  return pendingOrders.some(
-    (order) =>
-      locEquals(order.terminal, terminalLoc) &&
-      order.lines.some(
-        (line) =>
-          line.itemTypeId === itemTypeId &&
-          (line.itemName ?? "") === (itemName ?? "") &&
-          !line.exhausted &&
-          line.delivered < line.requested
-      )
-  );
-}
-
-// 自動預け入れ版のhasPendingOrderFor。直前に送った預け入れがまだ処理中なら同じ品目を二重に送らない。
-function hasPendingDepositFor(
-  networkId: string,
-  terminalLoc: Vector3,
-  itemTypeId: string,
-  itemName: string | undefined
-): boolean {
-  const pendingDeposits = [
-    ...getDepositIssuing(networkId).map((entry) => entry.request),
-    ...getDeposits(networkId),
-  ];
-  return pendingDeposits.some(
-    (request) =>
-      locEquals(request.terminal, terminalLoc) &&
-      request.lines.some(
-        (line) =>
-          line.itemTypeId === itemTypeId &&
-          (line.itemName ?? "") === (itemName ?? "") &&
-          !line.exhausted &&
-          line.delivered < line.requested
-      )
-  );
 }

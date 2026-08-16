@@ -51,6 +51,32 @@ export function listActiveDeposits(networkId: string): DepositRequest[] {
   return [...getDepositIssuing(networkId).map((entry) => entry.request), ...getDeposits(networkId)];
 }
 
+// orderProcessing.tsのhasPendingOrderForと同じ発想。直前に送った預け入れがまだ処理中なら
+// 同じ品目を二重に送らないための判定。自動端末・在庫管理ターミナルのどちらの定期チェックからも
+// 使う共通処理なのでここに置いている。
+export function hasPendingDepositFor(
+  networkId: string,
+  terminalLoc: Vector3,
+  itemTypeId: string,
+  itemName: string | undefined
+): boolean {
+  const pendingDeposits = [
+    ...getDepositIssuing(networkId).map((entry) => entry.request),
+    ...getDeposits(networkId),
+  ];
+  return pendingDeposits.some(
+    (request) =>
+      locEquals(request.terminal, terminalLoc) &&
+      request.lines.some(
+        (line) =>
+          line.itemTypeId === itemTypeId &&
+          (line.itemName ?? "") === (itemName ?? "") &&
+          !line.exhausted &&
+          line.delivered < line.requested
+      )
+  );
+}
+
 // orderProcessing.tsのcancelOrderと同じ発想の専用キャンセルキュー。
 export function cancelDeposit(networkId: string, requestId: string): void {
   const cancels = getDepositCancels(networkId);
