@@ -52,7 +52,7 @@ function progressTooltip(lines: ProgressLine[], cancelHint: string): UIRawMessag
 function setupCancellableList<T>(
   form: CustomForm,
   tabVisible: ObservableBoolean,
-  headerText: string,
+  headerText: string | undefined,
   fetchAll: () => T[],
   getRequestId: (item: T) => string,
   label: (item: T) => UIRawMessage,
@@ -107,7 +107,9 @@ function setupCancellableList<T>(
     }
   });
 
-  form.label(headerText, { visible: tabVisible });
+  // headerTextを渡さない呼び出し元(controllerUi.ts)は、スループット表示と兼用の独自の
+  // ヘッダーを自分で描画済みなので、ここでの重複ヘッダーは省略する。
+  if (headerText !== undefined) form.label(headerText, { visible: tabVisible });
   form.label(pageLabel, { visible: showPageLabel });
 
   form.button(
@@ -165,18 +167,21 @@ function setupCancellableList<T>(
   }, STATUS_REFRESH_INTERVAL_TICKS);
 }
 
+// includeHeaderをfalseにすると、セクション見出しの行を描画しない(controllerUi.tsのように
+// 呼び出し元がスループット表示と兼用の独自ヘッダーを既に描画している場合に使う)。
 export function setupOrderStatusSection(
   form: CustomForm,
   tabVisible: ObservableBoolean,
   dimension: Dimension,
   player: Player,
   networkId: string,
-  fetchAll: () => Order[]
+  fetchAll: () => Order[],
+  includeHeader = true
 ): number {
   return setupCancellableList<Order>(
     form,
     tabVisible,
-    "引き出し§7（タップでキャンセル）",
+    includeHeader ? "引き出し§7（タップでキャンセル）" : undefined,
     fetchAll,
     (order) => order.requestId,
     (order) => {
@@ -198,12 +203,13 @@ export function setupDepositStatusSection(
   dimension: Dimension,
   player: Player,
   networkId: string,
-  fetchAll: () => DepositRequest[]
+  fetchAll: () => DepositRequest[],
+  includeHeader = true
 ): number {
   return setupCancellableList<DepositRequest>(
     form,
     tabVisible,
-    "預け入れ§7（タップでキャンセル）",
+    includeHeader ? "預け入れ§7（タップでキャンセル）" : undefined,
     fetchAll,
     (request) => request.id,
     (request) => {
@@ -228,18 +234,19 @@ export function setupOrganizeStatusSection(
   tabVisible: ObservableBoolean,
   player: Player,
   networkId: string,
-  fetchAll: () => OrganizeRequest[]
+  fetchAll: () => OrganizeRequest[],
+  includeHeader = true
 ): number {
   return setupCancellableList<OrganizeRequest>(
     form,
     tabVisible,
-    "整理§7（タップでキャンセル）",
+    includeHeader ? "整理§7（タップでキャンセル）" : undefined,
     fetchAll,
     (request) => request.id,
     (request) => {
       const done = request.lines.filter((l) => l.done).length;
       const who = request.playerName || "自動";
-      return { text: `#${request.displayId} 整理(${done}/${request.lines.length}品目) (${who})` };
+      return { text: `#${request.displayId} 整理 (${who})` };
     },
     (request) => {
       const done = request.lines.filter((l) => l.done).length;

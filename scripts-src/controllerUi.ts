@@ -1,12 +1,22 @@
 import { Block, Player, system } from "@minecraft/server";
 import { CustomForm, ObservableBoolean, ObservableNumber } from "@minecraft/server-ui";
 import { getNotifyOnOrganizeComplete, setNotifyOnOrganizeComplete } from "./controllerSettings";
-import { listActiveDeposits } from "./depositProcessing";
+import { DEPOSIT_THROUGHPUT_PER_CYCLE, listActiveDeposits } from "./depositProcessing";
 import { findNetworkByController } from "./network";
-import { listActiveOrders } from "./orderProcessing";
-import { listActiveOrganize, submitOrganize } from "./organizeProcessing";
+import { NETWORK_PROCESSING_INTERVAL_TICKS } from "./networkProcessing";
+import { listActiveOrders, ORDER_THROUGHPUT_PER_CYCLE } from "./orderProcessing";
+import { listActiveOrganize, ORGANIZE_THROUGHPUT_PER_CYCLE, submitOrganize } from "./organizeProcessing";
 import { scanCatalog } from "./storageScan";
 import { setupDepositStatusSection, setupOrderStatusSection, setupOrganizeStatusSection } from "./statusListUi";
+
+// コントローラのタスク処理ループは、Minecraftのサーバーtick20回につき1回だけ実行される
+// (NETWORK_PROCESSING_INTERVAL_TICKS)。各処理の「スループット」定数はこのループ1回あたりの
+// 予算であり、サーバーtick単位のレートではない。「/tick」のような換算後の値だけを見せると、
+// あたかもサーバーtickごとのレートであるかのように誤解を招く(実機での指摘を受けた修正)ため、
+// 分母のサーバーtick数(=1サイクルが何tickか)もそのまま併記する形にしている。
+function throughputLabel(throughputPerCycle: number): string {
+  return `${throughputPerCycle}/${NETWORK_PROCESSING_INTERVAL_TICKS}tick`;
+}
 
 // 素手(レンチ以外)でコントローラを右クリックした時のUI。「状況」「整理」「設定」の
 // 3タブ構成(terminalUi.ts/autoTerminalUi.tsと同じく、タブの選択はdropdownで行う)。
@@ -62,17 +72,40 @@ export function showControllerUi(player: Player, block: Block): void {
   );
 
   // コントローラの「状況」タブはネットワーク全体が対象(ターミナルUIの「状況」タブは
-  // その端末に絞り込む。statusListUi.ts参照)。
-  const orderStatusRefreshTimer = setupOrderStatusSection(form, isStatusTab, dimension, player, network.id, () =>
-    listActiveOrders(network.id)
+  // その端末に絞り込む。statusListUi.ts参照)。各タスク一覧の上に、現在のスループットを
+  // 「値/サイクルのtick数」の形式で表示する(MVPでは固定値、将来はグレードに応じて
+  // 可変にする想定。docs/design.md 4章「スループット制」参照)。整理は搬入出先の
+  // ターミナルを介さずストレージ間でアイテムを動かすだけなので「内部」と表示する。
+  form.label(`引き出し §7${throughputLabel(ORDER_THROUGHPUT_PER_CYCLE)}`, { visible: isStatusTab });
+  const orderStatusRefreshTimer = setupOrderStatusSection(
+    form,
+    isStatusTab,
+    dimension,
+    player,
+    network.id,
+    () => listActiveOrders(network.id),
+    false
   );
   form.divider({ visible: isStatusTab });
-  const depositStatusRefreshTimer = setupDepositStatusSection(form, isStatusTab, dimension, player, network.id, () =>
-    listActiveDeposits(network.id)
+  form.label(`預け入れ §7${throughputLabel(DEPOSIT_THROUGHPUT_PER_CYCLE)}`, { visible: isStatusTab });
+  const depositStatusRefreshTimer = setupDepositStatusSection(
+    form,
+    isStatusTab,
+    dimension,
+    player,
+    network.id,
+    () => listActiveDeposits(network.id),
+    false
   );
   form.divider({ visible: isStatusTab });
-  const organizeStatusRefreshTimer = setupOrganizeStatusSection(form, isStatusTab, player, network.id, () =>
-    listActiveOrganize(network.id)
+  form.label(`内部 §7${throughputLabel(ORGANIZE_THROUGHPUT_PER_CYCLE)}`, { visible: isStatusTab });
+  const organizeStatusRefreshTimer = setupOrganizeStatusSection(
+    form,
+    isStatusTab,
+    player,
+    network.id,
+    () => listActiveOrganize(network.id),
+    false
   );
 
   const notifyOnComplete = new ObservableBoolean(getNotifyOnOrganizeComplete(dimension, block.location), {

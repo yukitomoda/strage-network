@@ -8,8 +8,12 @@ import { insertIntoStorages } from "./storageScan";
 
 // 倉庫の整理(引き出し/預け入れと同じくコントローラのタスク定期実行の仕組みに乗せる)。
 // MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
-// docs/design.md 4章「スループット制」参照。
-const ORGANIZE_THROUGHPUT_PER_TICK = 100;
+// docs/design.md 4章「スループット制」参照。コントローラUIの「状況」タブでは、ネットワーク
+// 外部とやり取りする引き出し/預け入れと対比して「内部」のスループットとして表示している
+// (ストレージ間の移動のみで、搬入出先のターミナルが無いため)。orderProcessing.tsの
+// ORDER_THROUGHPUT_PER_CYCLEと同じく、Minecraftのサーバーtick単位のレートではなく
+// 処理ループ1回あたりの予算。
+export const ORGANIZE_THROUGHPUT_PER_CYCLE = 100;
 
 // ネットワークにつき同時に1件まで。整理中に再度ボタンを押しても、既存のリクエストが
 // 終わるまでは何も起きない(整理はスナップショット時点の品目を対象にするだけの
@@ -68,7 +72,7 @@ export function processNetworkOrganize(network: NetworkData): void {
 
   const dimension = world.getDimension(network.dimensionId);
   const request = queue[0];
-  let budget = ORGANIZE_THROUGHPUT_PER_TICK;
+  let budget = ORGANIZE_THROUGHPUT_PER_CYCLE;
 
   // Drain指定の有無は、このtickのこのネットワーク分だけ1回判定して使い回す
   // (depositProcessing.tsのdepositTargetsと同じ理由。品目ごとに問い合わせない)。

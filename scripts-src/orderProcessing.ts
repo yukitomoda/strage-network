@@ -14,8 +14,11 @@ import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock
 import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
 
 // MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
-// docs/design.md 4章「スループット制」参照。
-const THROUGHPUT_PER_TICK = 1_0;
+// docs/design.md 4章「スループット制」参照。コントローラUIの「状況」タブ表示用にexportしている。
+// 「CYCLE」は「processNetworkOrdersが1回呼ばれるたびの予算」という意味で、Minecraftのサーバー
+// tick単位のレートではない(呼ばれる間隔はnetworkProcessing.tsのNETWORK_PROCESSING_INTERVAL_TICKS
+// =20tickに1回なので、サーバーtick基準のレートに換算する場合は20で割る)。
+export const ORDER_THROUGHPUT_PER_CYCLE = 1_0;
 // MVP: 発行遅延なし。将来はターミナルのグレードに応じて可変にする。
 const ISSUE_DELAY_TICKS = 0;
 
@@ -67,7 +70,7 @@ export function processNetworkOrders(network: NetworkData): void {
   processOrderCancels(network);
   moveReadyIssuingEntries(network);
 
-  let budget = THROUGHPUT_PER_TICK;
+  let budget = ORDER_THROUGHPUT_PER_CYCLE;
   let orders = getOrders(network.id);
 
   while (budget > 0 && orders.length > 0) {

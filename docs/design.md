@@ -154,7 +154,9 @@ function containersShareStorage(a: Container, b: Container): boolean {
 
 ### スループット制（グレード拡張性のため）
 
-「引き出しを一括即時処理」ではなく、**コントローラのグレードに応じた1tickあたりの搬送予算(budget)** を消費しながらキューを進める設計にする。これにより、将来「グレードの高いコントローラほど速い」という演出が、フェイクの待ち時間ではなく実際のスループットとして自然に実現できる。MVPでは`throughputPerTick`を十分大きい固定値にすることで、実質的に即時処理と変わらない挙動になる。
+「引き出しを一括即時処理」ではなく、**コントローラのグレードに応じた搬送予算(budget)** を消費しながらキューを進める設計にする。これにより、将来「グレードの高いコントローラほど速い」という演出が、フェイクの待ち時間ではなく実際のスループットとして自然に実現できる。MVPでは`throughputPerTick`を十分大きい固定値にすることで、実質的に即時処理と変わらない挙動になる。
+
+**用語の注意（実機での指摘を受けて整理）**: `ORDER_THROUGHPUT_PER_CYCLE`/`DEPOSIT_THROUGHPUT_PER_CYCLE`/`ORGANIZE_THROUGHPUT_PER_CYCLE`という名前が示す通り、この予算は**Minecraftのサーバーtick単位のレートではなく、コントローラの処理ループが1回実行されるたびの予算**である。処理ループ自体は`networkProcessing.ts`の`NETWORK_PROCESSING_INTERVAL_TICKS`(=20)により、サーバーtick20回につき1回だけ実行される。当初は`*_PER_TICK`という名前で、コントローラUIの「状況」タブにもそのまま「/tick」として表示していたが、これは実際のサーバーtickの20倍速く見えてしまう誤解を招く表示だった。修正: 定数名を`*_PER_CYCLE`に変更して意味を明確にした。UI表示側は、値をサーバーtickあたりのレートに割り算して換算する案も検討したが、割り算した数値だけを見せても結局「これは何のtick単位なのか」が伝わらないという指摘を受け、`controllerUi.ts`の`throughputLabel()`で**「値/サイクルのtick数」**（例:「10/20tick」）とサーバーtick数の分母をそのまま併記する表示にした。
 
 ```
 runInterval(20 ticks) {
@@ -243,6 +245,7 @@ runInterval(20 ticks) {
 - **預け入れセクション**: 引き出しと同じ表示にしてほしいという要望を受け、`DepositRequest`にも`displayId`/`playerName`を追加した(前節参照)ため、引き出しと全く同じ「#表示ID 端末名 (プレイヤー名 or 自動預け入れなら「自動」)」形式で表示する。
 - **整理セクション**: `OrganizeLine`は引き出し/預け入れの`OrderLine`/`DepositLine`と違い数量ベースの進捗(`requested`/`delivered`)を持たず、品目ごとの`done`フラグしか無い。また整理には搬入出先のターミナルという概念も無い。そのため表示は品目数ベースの進捗にし、ラベルは「#表示ID 整理(完了品目数/全品目数) (プレイヤー名 or 自動なら「自動」)」、ツールチップも同じ進捗を示すだけの簡潔なものにしている(整理対象はネットワーク全体のカタログなので、引き出し/預け入れのように品目を1行ずつ列挙すると長くなりすぎるため)。整理は自動発注/自動預け入れのような自動トリガーが無く常にプレイヤー操作から始まるが、`OrganizeRequest`自体は`Order`/`DepositRequest`と型を揃えるため`playerName`を持たせてあり、コードは一貫して「空文字列なら自動」という表示ロジックにしている。
 - **共通実装**: 引き出しの`OrderLine`と預け入れの`DepositLine`は品目ごとの進捗を全く同じ形(`itemTypeId`/`itemName`/`requested`/`delivered`/`exhausted`)で持つため、一覧・ページャー・キャンセル・ツールチップの生成ロジックは`setupCancellableList<T>`という1つのジェネリック関数にまとめ、引き出し用・預け入れ用それぞれの薄いラッパー(`setupOrderStatusSection`/`setupDepositStatusSection`)から呼び出している。
+- **スループット表示とヘッダーの兼用**: 各セクションの一覧の直前に、現在のスループット(処理ループ1回あたりの予算。`ORDER_THROUGHPUT_PER_CYCLE`/`DEPOSIT_THROUGHPUT_PER_CYCLE`/`ORGANIZE_THROUGHPUT_PER_CYCLE`をそれぞれexportして参照。4章「スループット制」参照)を「{引き出し/預け入れ/内部} §7{値}/{サイクルのtick数}tick」(`throughputLabel()`、例:「引き出し 10/20tick」)という固定テキストの`label`で表示する。整理は搬入出先のターミナルを介さずストレージ間でアイテムを動かすだけ(=ネットワーク外部とやり取りする引き出し/預け入れとは性質が違う)なので「内部」と表示している。MVPでは全て固定値でtickごとに変化しないため、値の表示はObservableではなく素の文字列で十分。このラベルは、`setupOrderStatusSection`等が内部で描画するセクション見出し(「引き出し（タップでキャンセル）」等)を兼ねている: 当初は両方を別々に表示していたが、見出しとスループット表示が並んで冗長という指摘を受け、コントローラUIから呼ぶ時だけ`includeHeader`引数(`setupOrderStatusSection`/`setupDepositStatusSection`/`setupOrganizeStatusSection`の最後の引数、デフォルト`true`)を`false`にして、`setupCancellableList`内蔵の見出し行を省略するようにした(ターミナルUI/自動端末UIの「状況」タブはスループット表示自体を持たないため、`includeHeader`は省略してデフォルトの`true`のまま=内蔵の見出しをそのまま使う)。
 
 各行のツールチップには品目ごとの「配送済み/要求数」を色分け(未完了は§e、完了は§a、品切れ確定は§c)して表示する。行をタップするとそのリクエストをキャンセルする(前節「引き出しのキャンセル」参照。預け入れのキャンセルも`cancelDeposit`/`wh:deposit_cancels:<networkId>`/`processDepositCancels`として全く同じ専用優先キュー方式で実装した)。`system.runInterval`でタブ表示中は各セクションの一覧を定期的に自動更新し、`form.show()`(DDUIのCustomFormはプレイヤーが閉じるまで解決しないPromiseを返す)の完了時に両セクション分のタイマーを`system.clearRun`で止めることで、タイマーを残さず安全に自動更新を実現している。更新間隔は当初1秒(20tick)にしていたが、更新のたびにボタンのTooltipが一瞬消えて再表示されチラつく(実機で確認)という指摘を受け、5秒(100tick)に緩めた。
 
