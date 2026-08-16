@@ -1,4 +1,4 @@
-import { Block, Container, Dimension, Player, Vector3 } from "@minecraft/server";
+import { Block, Container, Dimension, Player, system, Vector3 } from "@minecraft/server";
 import {
   CustomForm,
   ObservableBoolean,
@@ -8,12 +8,13 @@ import {
   UIRawMessage,
 } from "@minecraft/server-ui";
 import { findMembership } from "./network";
-import { submitDeposit } from "./depositProcessing";
-import { submitOrder } from "./orderProcessing";
+import { listActiveDeposits, submitDeposit } from "./depositProcessing";
+import { listActiveOrders, submitOrder } from "./orderProcessing";
+import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
 import { getAttachedStorageLocation } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName, setNotifyOnComplete, setTerminalName } from "./terminalSettings";
-import { DepositLine } from "./state";
+import { DepositLine, locEquals } from "./state";
 
 const ROW_COUNT = 8;
 
@@ -298,22 +299,26 @@ export function showOrderUi(player: Player, block: Block): void {
 
   const isOrderTab = new ObservableBoolean(true);
   const isDepositTab = new ObservableBoolean(false);
+  const isStatusTab = new ObservableBoolean(false);
   const isSettingsTab = new ObservableBoolean(false);
 
-  // タブ切り替えはボタンではなくドロップダウンで行う。選択値(0=引き出し/1=預け入れ/2=設定)の
-  // 変化を購読して、各タブのvisible/disabled用Observableに反映する。
+  // タブ切り替えはボタンではなくドロップダウンで行う。選択値
+  // (0=引き出し/1=預け入れ/2=状況/3=設定)の変化を購読して、各タブのvisible/disabled用
+  // Observableに反映する。
   const tabSelection = new ObservableNumber(0, { clientWritable: true });
   tabSelection.subscribe((index) => {
     isOrderTab.setData(index === 0);
     isDepositTab.setData(index === 1);
-    isSettingsTab.setData(index === 2);
+    isStatusTab.setData(index === 2);
+    isSettingsTab.setData(index === 3);
   });
 
   const form = new CustomForm(player, terminalName ? `倉庫端末: ${terminalName}` : "倉庫端末");
   form.dropdown("", tabSelection, [
     { label: "引き出し", value: 0 },
     { label: "預け入れ", value: 1 },
-    { label: "設定", value: 2 },
+    { label: "状況", value: 2 },
+    { label: "設定", value: 3 },
   ]);
 
   setupTab(form, isOrderTab, orderCatalog, "確定", (lines) => {
@@ -322,6 +327,17 @@ export function showOrderUi(player: Player, block: Block): void {
   });
 
   setupDepositTab(form, player, isDepositTab, attachedContainer, network.id, block.location);
+
+  // 「状況」タブはコントローラUIと同じ実装(statusListUi.ts)を使うが、ネットワーク全体では
+  // なく、この端末が送信元/宛先のものだけに絞り込む(fetchAllでlocEquals(terminal)フィルタ)。
+  form.divider({ visible: isStatusTab });
+  const orderStatusRefreshTimer = setupOrderStatusSection(form, isStatusTab, dimension, player, network.id, () =>
+    listActiveOrders(network.id).filter((order) => locEquals(order.terminal, block.location))
+  );
+  form.divider({ visible: isStatusTab });
+  const depositStatusRefreshTimer = setupDepositStatusSection(form, isStatusTab, dimension, player, network.id, () =>
+    listActiveDeposits(network.id).filter((request) => locEquals(request.terminal, block.location))
+  );
 
   setupSettingsTab(
     form,
@@ -332,5 +348,11 @@ export function showOrderUi(player: Player, block: Block): void {
     terminalName ?? ""
   );
 
-  form.show().catch((e) => console.error(e));
+  form
+    .show()
+    .catch((e) => console.error(e))
+    .finally(() => {
+      system.clearRun(orderStatusRefreshTimer);
+      system.clearRun(depositStatusRefreshTimer);
+    });
 }

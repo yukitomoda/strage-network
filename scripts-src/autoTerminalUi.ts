@@ -1,4 +1,4 @@
-import { Block, Dimension, ItemStack, Player, Vector3 } from "@minecraft/server";
+import { Block, Dimension, ItemStack, Player, system, Vector3 } from "@minecraft/server";
 import {
   CustomForm,
   ObservableBoolean,
@@ -7,8 +7,11 @@ import {
   ObservableUIRawMessage,
   UIRawMessage,
 } from "@minecraft/server-ui";
+import { listActiveDeposits } from "./depositProcessing";
 import { findMembership } from "./network";
-import { WishlistLine } from "./state";
+import { listActiveOrders } from "./orderProcessing";
+import { locEquals, WishlistLine } from "./state";
+import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog } from "./storageScan";
 import {
   getAutoDeposit,
@@ -269,19 +272,22 @@ export function showAutoTerminalUi(player: Player, block: Block): void {
   const terminalName = getTerminalName(dimension, block.location);
 
   const isListTab = new ObservableBoolean(true);
+  const isStatusTab = new ObservableBoolean(false);
   const isSettingsTab = new ObservableBoolean(false);
 
   // タブ切り替えはボタンではなくドロップダウンで行う(terminalUi.tsのshowOrderUiと同じ方式)。
   const tabSelection = new ObservableNumber(0, { clientWritable: true });
   tabSelection.subscribe((index) => {
     isListTab.setData(index === 0);
-    isSettingsTab.setData(index === 1);
+    isStatusTab.setData(index === 1);
+    isSettingsTab.setData(index === 2);
   });
 
   const form = new CustomForm(player, terminalName ? `自動端末: ${terminalName}` : "自動端末");
   form.dropdown("", tabSelection, [
     { label: "自動引き出し", value: 0 },
-    { label: "設定", value: 1 },
+    { label: "状況", value: 1 },
+    { label: "設定", value: 2 },
   ]);
   form.divider();
 
@@ -294,6 +300,16 @@ export function showAutoTerminalUi(player: Player, block: Block): void {
     getWishlist(dimension, block.location)
   );
 
+  // 「状況」タブはterminalUi.tsのshowOrderUiと全く同じ実装(statusListUi.ts)を、この端末に
+  // 絞り込んで使う(この端末が送信元/宛先の自動引き出し・自動預け入れだけを表示)。
+  const orderStatusRefreshTimer = setupOrderStatusSection(form, isStatusTab, dimension, player, network.id, () =>
+    listActiveOrders(network.id).filter((order) => locEquals(order.terminal, block.location))
+  );
+  form.divider({ visible: isStatusTab });
+  const depositStatusRefreshTimer = setupDepositStatusSection(form, isStatusTab, dimension, player, network.id, () =>
+    listActiveDeposits(network.id).filter((request) => locEquals(request.terminal, block.location))
+  );
+
   setupSettingsTab(
     form,
     isSettingsTab,
@@ -303,5 +319,11 @@ export function showAutoTerminalUi(player: Player, block: Block): void {
     getAutoDeposit(dimension, block.location)
   );
 
-  form.show().catch((e) => console.error(e));
+  form
+    .show()
+    .catch((e) => console.error(e))
+    .finally(() => {
+      system.clearRun(orderStatusRefreshTimer);
+      system.clearRun(depositStatusRefreshTimer);
+    });
 }
