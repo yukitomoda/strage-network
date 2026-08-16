@@ -215,6 +215,24 @@ export function resolveStorageMembership(
   return undefined;
 }
 
+// ネットワークの接続範囲(コントローラを中心とした立方体の半径、ブロック数)。MVP: 固定値。
+// 将来はコントローラのグレードに応じて可変にする想定(4章「スループット制」と同じ考え方。
+// docs/design.md参照)。この値はrangeIndicator.tsのジオメトリ(range_wall/range_ceiling)の
+// サイズにも直接焼き込まれているため、変更する場合はそちらも合わせて調整する必要がある。
+export const NETWORK_RANGE_BLOCKS = 8;
+
+// 立方体(各軸の距離が全てNETWORK_RANGE_BLOCKS以内)で判定する。当初は球(ユークリッド距離)
+// だったが、Minecraft本来の距離判定(ワールドボーダー等)は立方体状のものが多く感覚に合う、
+// 判定がシンプルになる、可視化(rangeIndicator.ts)も高さごとに断面の大きさが変わらず済む、
+// という理由から立方体に変更した。
+export function isWithinNetworkRange(network: NetworkData, loc: Vector3): boolean {
+  return (
+    Math.abs(network.controller.x - loc.x) <= NETWORK_RANGE_BLOCKS &&
+    Math.abs(network.controller.y - loc.y) <= NETWORK_RANGE_BLOCKS &&
+    Math.abs(network.controller.z - loc.z) <= NETWORK_RANGE_BLOCKS
+  );
+}
+
 export function toggleStorage(networkId: string, loc: Vector3): "connected" | "disconnected" {
   const network = getNetwork(networkId);
   if (!network) throw new Error(`network not found: ${networkId}`);

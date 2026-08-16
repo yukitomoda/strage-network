@@ -74,6 +74,12 @@ function wrenchColorAt(u, v) {
   return [0, 0, 0, 0];
 }
 
+// ネットワーク接続範囲インジケータ(range_wall/range_ceiling): 全面同じ半透明の水色。
+// entity_alphablendマテリアルで使うため、アルファ値は完全不透明にしない。
+function rangeIndicatorColorAt() {
+  return [80, 160, 255, 90];
+}
+
 function packIconColorAt(u, v) {
   const dx = Math.abs(u - 0.5);
   const dy = Math.abs(v - 0.5);
@@ -124,5 +130,6 @@ writePng("RP/textures/blocks/terminal.png", 16, terminalColorAt);
 writePng("RP/textures/blocks/auto_terminal.png", 16, autoTerminalColorAt);
 writePng("RP/textures/blocks/inventory_terminal.png", 16, inventoryTerminalColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
+writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);
 writePng("BP/pack_icon.png", 128, packIconColorAt);

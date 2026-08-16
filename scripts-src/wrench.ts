@@ -6,6 +6,8 @@ import {
   findPhysicalStoragePair,
   getAllNetworks,
   getNetwork,
+  isWithinNetworkRange,
+  NETWORK_RANGE_BLOCKS,
   resolveStorageMembership,
   toggleStorage,
   toggleTerminal,
@@ -15,7 +17,8 @@ import { getDrain, removeSettingsEntity as removeStorageSettingsEntity, setDrain
 import { isTerminalLikeBlock } from "./terminalBlock";
 import { getToolMode } from "./toolMode";
 import { showToolModeUi } from "./toolModeUi";
-import { getEditingNetworkId, setEditingNetworkId } from "./editingSession";
+import { endEditingSession, getEditingNetworkId, isAnyoneEditingNetwork, setEditingNetworkId } from "./editingSession";
+import { syncRangeIndicator } from "./rangeIndicator";
 
 const HIGHLIGHT_INTERVAL = 10;
 
@@ -81,12 +84,14 @@ function handleControllerUse(player: Player, dimension: Dimension, block: Block)
   }
 
   if (getEditingNetworkId(player) === network.id) {
-    setEditingNetworkId(player, undefined);
+    endEditingSession(player);
     player.sendMessage("§eネットワーク編集を終了しました。");
     return;
   }
 
   setEditingNetworkId(player, network.id);
+  // 自分が今まさに編集を開始したので、isAnyoneEditingNetworkを問い合わせるまでもなく必ず表示する。
+  syncRangeIndicator(dimension, network, true);
   const modeHint =
     getToolMode(player) === "drain"
       ? "ストレージをShiftキーを押しながら右クリックしてDrain指定を切り替えてください。"
@@ -101,6 +106,15 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     const network = getNetwork(editingNetworkId);
     const alreadyInThisNetwork = network?.terminals.some((t) => locEquals(t, block.location));
     if (!alreadyInThisNetwork) {
+      // 新規接続(切断は範囲外でも常に許可する。既存メンバーが後から範囲外になった場合に
+      // 切断すらできなくなる事故を避けるため)。
+      if (network && !isWithinNetworkRange(network, block.location)) {
+        player.sendMessage(
+          `§cコントローラから各方向に${NETWORK_RANGE_BLOCKS}マスを超えているため接続できません。`
+        );
+        return;
+      }
+
       // ターミナルはストレージと違い、同時に複数のネットワークに接続されると
       // どちらのネットワーク宛の引き出し/預け入れとして処理すべきか曖昧になり誤動作する
       // (実機で発見された不具合の修正済み)。そのため、他のネットワークに既に
@@ -123,6 +137,14 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     const network = getNetwork(editingNetworkId);
     const alreadyConnected = network?.storages.some((s) => locEquals(s, block.location));
     if (network && !alreadyConnected) {
+      // 新規接続(切断は範囲外でも常に許可する。ターミナル側と同じ理由)。
+      if (!isWithinNetworkRange(network, block.location)) {
+        player.sendMessage(
+          `§cコントローラから各方向に${NETWORK_RANGE_BLOCKS}マスを超えているため接続できません。`
+        );
+        return;
+      }
+
       const paired = findAdjacentConnectedStorage(dimension, network, block.location);
       if (paired) {
         player.sendMessage(
@@ -213,10 +235,42 @@ function highlightEditingNetwork(player: Player): void {
   for (const p of points) spawnHighlightParticle(dimension, "minecraft:villager_happy", p);
 }
 
+// 接続範囲インジケータの表示状態を全ネットワーク分まとめて再計算する(rangeIndicator.tsの
+// syncRangeIndicator参照)。プレイヤーの参加/離脱・編集開始/終了のたびに個別に呼ぶだけでは、
+// ログアウトのタイミング次第で後片付けが漏れることがある(playerLeaveの後片付けを参照)ため、
+// この定期実行を「必ず正しい状態に収束させる」ための保険として毎tickループに乗せている。
+function reconcileAllRangeIndicators(): void {
+  for (const network of getAllNetworks()) {
+    const dimension = world.getDimension(network.dimensionId);
+    syncRangeIndicator(dimension, network, isAnyoneEditingNetwork(network.id));
+  }
+}
+
 export function startWrenchHighlightLoop(): void {
   system.runInterval(() => {
     for (const player of world.getPlayers()) {
       highlightEditingNetwork(player);
     }
+    reconcileAllRangeIndicators();
   }, HIGHLIGHT_INTERVAL);
+}
+
+// 編集セッション中(wh:editing_networkを持つ)にプレイヤーがログアウトすると、
+// 明示的な終了操作(コントローラのShift+右クリック/レンチメニューの終了ボタン)を
+// 経ないまま抜けてしまう。beforeEvents.playerLeaveはプレイヤーがまだ存在する時点で
+// 発火するため、ここでendEditingSessionを呼んで即座に後片付けを試みる。
+// (実機で発見された不具合の修正): シングルプレイでワールドを終了する場合など、
+// このイベント内の処理が完了する前にワールド自体が終了してしまい、後片付けが
+// 反映されないことがあった。そのため、これは「できれば即座に」という best-effort の
+// 位置づけにとどめ、確実な後片付けはstartWrenchHighlightLoopの定期的な
+// reconcileAllRangeIndicators側に委ねている(isAnyoneEditingNetworkはオンライン中の
+// プレイヤーしか見ないため、ログアウトした時点でそのプレイヤーの分は自動的に
+// 「編集中ではない」扱いになり、壁は正しく消える。唯一、このイベントが正常に処理されずに
+// wh:editing_networkが消し忘れられた場合は、次回ログイン時に編集モードへ復帰したように
+// 見えてしまう副作用が残るが、実害は軽微でありコントローラを再度Shift+右クリックすれば
+// いつでも解消できる)。
+export function registerWrenchPlayerLeaveWatcher(): void {
+  world.beforeEvents.playerLeave.subscribe((event) => {
+    endEditingSession(event.player);
+  });
 }

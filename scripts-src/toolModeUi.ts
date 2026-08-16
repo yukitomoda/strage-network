@@ -1,6 +1,6 @@
 import { Player } from "@minecraft/server";
 import { CustomForm } from "@minecraft/server-ui";
-import { getEditingNetworkId, setEditingNetworkId } from "./editingSession";
+import { endEditingSession, getEditingNetworkId } from "./editingSession";
 import { getToolMode, setToolMode, ToolMode } from "./toolMode";
 
 const MODE_LABELS: Record<ToolMode, string> = {
@@ -34,7 +34,7 @@ export function showToolModeUi(player: Player): void {
   if (getEditingNetworkId(player) !== undefined) {
     form.divider();
     form.button("編集モードを終了する", () => {
-      setEditingNetworkId(player, undefined);
+      endEditingSession(player);
       player.sendMessage("§eネットワーク編集を終了しました。");
       form.close();
     });

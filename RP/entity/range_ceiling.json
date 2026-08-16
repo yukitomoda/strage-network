@@ -1,0 +1,12 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "wh:range_ceiling",
+      "materials": { "default": "entity_alphablend" },
+      "textures": { "default": "textures/entity/range_indicator" },
+      "geometry": { "default": "geometry.range_ceiling" },
+      "render_controllers": ["controller.render.range_ceiling"]
+    }
+  }
+}
