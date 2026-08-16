@@ -11,8 +11,9 @@ import { DepositLine, locEquals, NetworkData, OrderLine, WishlistLine } from "./
 // docs/design.md 4章「スループット制」と同様の考え方。
 const AUTO_CHECK_INTERVAL_TICKS = 100;
 
-// 自動発注には送信元プレイヤーが存在しないため、通知先が絶対に見つからないダミー名にしておく
-// (自動端末は既定で通知OFFだが、プレイヤーが後から通知ONにしても実害が無いように)。
+// 自動発注・自動預け入れには送信元プレイヤーが存在しないため、空文字列にしておく
+// (引き出しの完了通知は既定でOFFだが、後からONにしても通知先が見つからず実害が無いように。
+// コントローラUIの「状況」タブでも、空文字列は「自動」として表示される)。
 const AUTO_ORDER_PLAYER_NAME = "";
 
 export function startAutoTerminalCheckLoop(): void {
@@ -105,7 +106,7 @@ function checkExcess(
   }
 
   if (lines.length > 0) {
-    submitDeposit(network.id, terminalLoc, lines);
+    submitDeposit(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, lines);
   }
 }
 

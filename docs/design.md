@@ -227,7 +227,7 @@ runInterval(20 ticks) {
 
 引き出し（ネットワークのストレージ → ターミナルの張り付いた先）と対称な、逆方向の処理を追加した。ターミナルの張り付いた先のコンテナに入っているアイテムを、ネットワーク内のストレージ群へ配って格納する。
 
-- データモデル・処理モデルは`Order`/`OrderLine`と完全に対称（`DepositRequest`/`DepositLine`、`wh:deposits:<networkId>`、`wh:deposit_issuing:<networkId>`、`wh:deposit_partial:<networkId>`）。
+- データモデル・処理モデルは`Order`/`OrderLine`と完全に対称（`DepositRequest`/`DepositLine`、`wh:deposits:<networkId>`、`wh:deposit_issuing:<networkId>`、`wh:deposit_partial:<networkId>`）。`DepositRequest`は当初、表示用ID・実行者情報を持っていなかった（完了通知の仕組みが無いため、そもそも表示する機会が無かった）が、後に追加したコントローラUIの「状況」タブ(4章参照)で引き出しと同様の表示をしたいという要望を受け、`Order`と同じ形（`displayId`は`generateDepositId()`による表示用ID、`playerName`は実行者。自動預け入れは空文字列で「自動」表示になる、`AUTO_ORDER_PLAYER_NAME`と同じ扱い）を追加した。厳密な一意ID(`id`、キャンセル指定用)とは別に`displayId`を持つ点は、`Order`(`id`=表示用/`requestId`=厳密)と役割の対応が逆になっている（`DepositRequest.id`は元々`generateId()`による厳密な一意IDだったため、そちらを変えずに表示用を追加する形にした）。
 - ただし**別系統として実装**し、スループット・発行遅延の定数（`DEPOSIT_THROUGHPUT_PER_TICK`等）を引き出し側とは独立して調整できるようにした。処理自体は同じ`system.runInterval`ループの中で、引き出しの処理に続けて呼び出す（`networkProcessing.ts`が両方を束ねる）。
 - `DepositRequest`/`DepositLine`自体は引き出しと同様「何を何個」を持てる形にしてあるが、MVPのUIでは検索・カート選択はさせず、**張り付いた先のコンテナに今入っている物を全部まとめて1回のリクエストにするワンボタン**にした（実用上、細かい数量指定のニーズがほぼ無いため）。将来UIを変えたくなってもデータ構造の変更は不要。
 - 搬入先(=ネットワーク内のどのストレージに入るか)は、`network.storages`を順番に試し、入りきらない分は次のストレージへ回す（1つのストレージで満杯なら次へ、を全て試して入らなければ「不足」として`wh:deposit_partial`に記録）。
@@ -240,7 +240,7 @@ runInterval(20 ticks) {
 「状況」タブは、進行中の引き出し(`listActiveOrders` = `wh:issuing`+`wh:orders`)・進行中の預け入れ(`listActiveDeposits` = `wh:deposit_issuing`+`wh:deposits`)を、それぞれ独立したセクション(見出し+ページャー+行ボタン+ページャー、間に`divider`)として上下に並べて表示する。整理の状況表示は引き続き将来の拡張のままとした(9章参照)。他の一覧UIと同じくROW_COUNT=8のページャー付き。
 
 - **引き出しセクション**: 各行のラベルは「#表示ID 端末名 (プレイヤー名 or 自動発注なら「自動」)」。
-- **預け入れセクション**: 預け入れには表示用の緩いID自体が元々存在しない(完了通知の仕組みも無い、前述)ため、各行のラベルは端末名のみ。同じ端末から複数の預け入れリクエストが同時にキューされているとラベルが重複することがあるが、`DepositRequest.id`(元々`generateId()`による厳密な一意ID。表示用の緩いIDを別途持たない設計)でクリックごとに正しいリクエストを個別に特定できるため実害は無い。
+- **預け入れセクション**: 引き出しと同じ表示にしてほしいという要望を受け、`DepositRequest`にも`displayId`/`playerName`を追加した(前節参照)ため、引き出しと全く同じ「#表示ID 端末名 (プレイヤー名 or 自動預け入れなら「自動」)」形式で表示する。
 - **共通実装**: 引き出しの`OrderLine`と預け入れの`DepositLine`は品目ごとの進捗を全く同じ形(`itemTypeId`/`itemName`/`requested`/`delivered`/`exhausted`)で持つため、一覧・ページャー・キャンセル・ツールチップの生成ロジックは`setupCancellableList<T>`という1つのジェネリック関数にまとめ、引き出し用・預け入れ用それぞれの薄いラッパー(`setupOrderStatusSection`/`setupDepositStatusSection`)から呼び出している。
 
 各行のツールチップには品目ごとの「配送済み/要求数」を色分け(未完了は§e、完了は§a、品切れ確定は§c)して表示する。行をタップするとそのリクエストをキャンセルする(前節「引き出しのキャンセル」参照。預け入れのキャンセルも`cancelDeposit`/`wh:deposit_cancels:<networkId>`/`processDepositCancels`として全く同じ専用優先キュー方式で実装した)。`system.runInterval`でタブ表示中は各セクションの一覧を定期的に自動更新し、`form.show()`(DDUIのCustomFormはプレイヤーが閉じるまで解決しないPromiseを返す)の完了時に両セクション分のタイマーを`system.clearRun`で止めることで、タイマーを残さず安全に自動更新を実現している。更新間隔は当初1秒(20tick)にしていたが、更新のたびにボタンのTooltipが一瞬消えて再表示されチラつく(実機で確認)という指摘を受け、5秒(100tick)に緩めた。

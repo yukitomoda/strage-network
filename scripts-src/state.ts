@@ -57,7 +57,9 @@ export type DepositLine = {
 };
 
 export type DepositRequest = {
-  id: string;
+  id: string; // 厳密な一意ID(generateId()。キャンセル指定に使う、表示には使わない)
+  displayId: string; // 表示用ID(generateDepositId()。Order.idと同じ、厳密な一意性は不要)
+  playerName: string; // 実行者(Order.playerNameと同じ考え方。自動預け入れの場合は空文字列)
   terminal: Vector3;
   lines: DepositLine[];
 };
@@ -111,6 +113,11 @@ function generateShortCode(): string {
 // 引き出しの表示用ID。
 export function generateOrderId(): string {
   return `TAK-${generateShortCode()}`;
+}
+
+// 預け入れの表示用ID。引き出しとひと目で見分けられるよう接頭辞を変えている。
+export function generateDepositId(): string {
+  return `DEP-${generateShortCode()}`;
 }
 
 // ターミナルの初期名。設定タブでいつでも変更できる前提の、区別のためだけの仮名。

@@ -243,9 +243,9 @@ function setupDepositTab(
         delivered: 0,
         exhausted: false,
       }));
-      submitDeposit(networkId, terminalLoc, lines);
+      const depositId = submitDeposit(networkId, terminalLoc, player.name, lines);
       form.close();
-      player.sendMessage("§b倉庫ネットワークへ送信しました。");
+      player.sendMessage(`§b預け入れ #${depositId} をネットワークへ送信しました。`);
     },
     { visible: tabVisible }
   );

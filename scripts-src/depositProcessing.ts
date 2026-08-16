@@ -9,7 +9,15 @@ import {
   setDeposits,
 } from "./network";
 import { buildStorageIndex, insertIntoStorages } from "./storageScan";
-import { DepositLine, DepositRequest, generateId, locEquals, NetworkData, PartialResultLine } from "./state";
+import {
+  DepositLine,
+  DepositRequest,
+  generateDepositId,
+  generateId,
+  locEquals,
+  NetworkData,
+  PartialResultLine,
+} from "./state";
 import { getDrain } from "./storageSettings";
 import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 
@@ -19,11 +27,19 @@ import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock
 const DEPOSIT_THROUGHPUT_PER_TICK = 1_0;
 const DEPOSIT_ISSUE_DELAY_TICKS = 0;
 
-export function submitDeposit(networkId: string, terminalLoc: Vector3, lines: DepositLine[]): void {
-  const request: DepositRequest = { id: generateId(), terminal: terminalLoc, lines };
+// 戻り値のdisplayIdはプレイヤーへの表示用(submitOrderのidと同じ役割)。
+export function submitDeposit(networkId: string, terminalLoc: Vector3, playerName: string, lines: DepositLine[]): string {
+  const request: DepositRequest = {
+    id: generateId(),
+    displayId: generateDepositId(),
+    playerName,
+    terminal: terminalLoc,
+    lines,
+  };
   const entries = getDepositIssuing(networkId);
   entries.push({ request, readyAtTick: system.currentTick + DEPOSIT_ISSUE_DELAY_TICKS });
   setDepositIssuing(networkId, entries);
+  return request.displayId;
 }
 
 // コントローラの「状況」タブ(controllerUi.ts)向け: orderProcessing.tsのlistActiveOrdersと

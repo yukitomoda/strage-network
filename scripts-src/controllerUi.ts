@@ -207,12 +207,13 @@ function setupDepositStatusSection(
     (request) => request.id,
     (request) => {
       const terminalName = getTerminalName(dimension, request.terminal) ?? "端末";
-      return { text: terminalName };
+      const who = request.playerName || "自動";
+      return { text: `#${request.displayId} ${terminalName} (${who})` };
     },
     (request) => progressTooltip(request.lines, "タップでキャンセルします(格納済みの分は返送されません)。"),
     (request) => {
       cancelDeposit(networkId, request.id);
-      player.sendMessage("§e預け入れをキャンセルしました。");
+      player.sendMessage(`§e預け入れ #${request.displayId} をキャンセルしました。`);
     }
   );
 }
