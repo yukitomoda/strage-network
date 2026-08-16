@@ -1,8 +1,10 @@
 import { system, Vector3, world } from "@minecraft/server";
 import {
   appendDepositPartial,
+  getDepositCancels,
   getDepositIssuing,
   getDeposits,
+  setDepositCancels,
   setDepositIssuing,
   setDeposits,
 } from "./network";
@@ -14,7 +16,7 @@ import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock
 // 引き出し(orderProcessing.ts)と対称だが、方向が逆(ターミナルの張り付いた先 -> ネットワーク内の
 // ストレージ群)で、スループット・発行遅延は個別に設定できるようにしている。
 // MVPでは両方とも十分大きい固定値/0で、実質即時処理になる。docs/design.md 4章参照。
-const DEPOSIT_THROUGHPUT_PER_TICK = 1_000_000;
+const DEPOSIT_THROUGHPUT_PER_TICK = 1_0;
 const DEPOSIT_ISSUE_DELAY_TICKS = 0;
 
 export function submitDeposit(networkId: string, terminalLoc: Vector3, lines: DepositLine[]): void {
@@ -24,9 +26,39 @@ export function submitDeposit(networkId: string, terminalLoc: Vector3, lines: De
   setDepositIssuing(networkId, entries);
 }
 
+// コントローラの「状況」タブ(controllerUi.ts)向け: orderProcessing.tsのlistActiveOrdersと
+// 同じ考え方。DepositRequest.idは(Order.idと違い)元々generateId()による厳密な一意IDなので、
+// 表示・キャンセル指定のどちらにもそのまま使える(別途requestIdを持たせる必要が無い)。
+export function listActiveDeposits(networkId: string): DepositRequest[] {
+  return [...getDepositIssuing(networkId).map((entry) => entry.request), ...getDeposits(networkId)];
+}
+
+// orderProcessing.tsのcancelOrderと同じ発想の専用キャンセルキュー。
+export function cancelDeposit(networkId: string, requestId: string): void {
+  const cancels = getDepositCancels(networkId);
+  cancels.push(requestId);
+  setDepositCancels(networkId, cancels);
+}
+
+// orderProcessing.tsのprocessOrderCancelsと同じ発想。issuing・requests両方から探して除去する。
+function processDepositCancels(network: NetworkData): void {
+  const cancelIds = getDepositCancels(network.id);
+  if (cancelIds.length === 0) return;
+  const cancelSet = new Set(cancelIds);
+
+  const issuing = getDepositIssuing(network.id).filter((entry) => !cancelSet.has(entry.request.id));
+  setDepositIssuing(network.id, issuing);
+
+  const requests = getDeposits(network.id).filter((request) => !cancelSet.has(request.id));
+  setDeposits(network.id, requests);
+
+  setDepositCancels(network.id, []); // 消費済み
+}
+
 export function processNetworkDeposits(network: NetworkData): void {
   const dimension = world.getDimension(network.dimensionId);
 
+  processDepositCancels(network);
   moveReadyDepositIssuingEntries(network);
 
   let budget = DEPOSIT_THROUGHPUT_PER_TICK;

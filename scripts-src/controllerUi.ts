@@ -8,10 +8,11 @@ import {
   UIRawMessage,
 } from "@minecraft/server-ui";
 import { getNotifyOnOrganizeComplete, setNotifyOnOrganizeComplete } from "./controllerSettings";
+import { cancelDeposit, listActiveDeposits } from "./depositProcessing";
 import { findNetworkByController } from "./network";
 import { cancelOrder, listActiveOrders } from "./orderProcessing";
 import { submitOrganize } from "./organizeProcessing";
-import { Order } from "./state";
+import { DepositRequest, Order } from "./state";
 import { scanCatalog } from "./storageScan";
 import { getTerminalName } from "./terminalSettings";
 
@@ -23,17 +24,15 @@ const ROW_COUNT = 8;
 // 5秒(100tick)に設定している。
 const STATUS_REFRESH_INTERVAL_TICKS = 100;
 
-function orderLabel(order: Order, dimension: Dimension): UIRawMessage {
-  const terminalName = getTerminalName(dimension, order.terminal) ?? "端末";
-  const who = order.playerName || "自動";
-  return { text: `#${order.id} ${terminalName} (${who})` };
-}
+// 引き出し(OrderLine)・預け入れ(DepositLine)は品目ごとの進捗を全く同じ形で持つため、
+// ツールチップ生成もこの共通の形に対して1つだけ書けばよい。
+type ProgressLine = { itemTypeId: string; itemName?: string; requested: number; delivered: number; exhausted: boolean };
 
 // 品目ごとの「配送済み/要求数」を色分けして並べたツールチップ(§書式コードが効くのは
 // ボタンのtooltipだけ、詳細はdocs/design.md 7章参照)。
-function orderTooltip(order: Order): UIRawMessage {
+function progressTooltip(lines: ProgressLine[], cancelHint: string): UIRawMessage {
   const parts: UIRawMessage[] = [];
-  order.lines.forEach((line, i) => {
+  lines.forEach((line, i) => {
     if (i > 0) parts.push({ text: "\n" });
     const color = line.exhausted ? "§c" : line.delivered >= line.requested ? "§a" : "§e";
     parts.push({ text: `${color}${line.delivered}/${line.requested} ` });
@@ -42,51 +41,60 @@ function orderTooltip(order: Order): UIRawMessage {
     );
     if (line.exhausted) parts.push({ text: "§c(品切れ)" });
   });
-  parts.push({ text: "\n§7タップでキャンセルします(配送済みの分は返送されません)。" });
+  parts.push({ text: `\n§7${cancelHint}` });
   return { rawtext: parts };
 }
 
-// 「状況」タブ: 進行中の引き出し一覧。タップでキャンセルする(巻き戻しはせず、
-// 残りの未処理ラインだけを取り消す。詳細はorderProcessing.tsのprocessOrderCancels参照)。
+// 「状況」タブの1セクション分(引き出し一覧・預け入れ一覧のどちらにも使う汎用実装)。
+// 進行中のリクエスト一覧をページャー付きの行ボタンで表示し、タップでキャンセルする
+// (巻き戻しはせず、残りの未処理ラインだけを取り消す。詳細はorderProcessing.tsの
+// processOrderCancels/depositProcessing.tsのprocessDepositCancels参照)。
 // 戻り値のtimer idは、呼び出し元(showControllerUi)がform.show()の完了時にclearRunする。
-function setupStatusTab(
+function setupCancellableList<T>(
   form: CustomForm,
   tabVisible: ObservableBoolean,
-  dimension: Dimension,
-  player: Player,
-  networkId: string
+  headerText: string,
+  fetchAll: () => T[],
+  getRequestId: (item: T) => string,
+  label: (item: T) => UIRawMessage,
+  tooltip: (item: T) => UIRawMessage,
+  onCancel: (item: T) => void
 ): number {
-  // キャンセルは次tickのprocessNetworkOrdersで実際に取り除かれるため、それまでの間も
-  // 見た目には即座に反映されるよう、このUIセッション内でキャンセル済みのrequestIdを
-  // 覚えておいてlistActiveOrdersの結果から除外する。
+  // キャンセルは次tickの処理ループで実際に取り除かれるため、それまでの間も見た目には
+  // 即座に反映されるよう、このUIセッション内でキャンセル済みのrequestIdを覚えておいて
+  // 一覧から除外する。
   const cancelledIds = new Set<string>();
 
   const rowLabels: ObservableUIRawMessage[] = [];
   const rowTooltips: ObservableUIRawMessage[] = [];
   const rowVisible: ObservableBoolean[] = [];
-  let filtered: Order[] = [];
+  let filtered: T[] = [];
 
   let currentPage = 0;
   const hasPrevPage = new ObservableBoolean(false);
   const hasNextPage = new ObservableBoolean(false);
   const pageLabel = new ObservableString("1 / 1 ページ");
+  // ページが1つしか無い(=ほぼ常にそう)場合にまで「1 / 1 ページ」を表示すると煩わしいため、
+  // 2ページ以上ある時だけ表示する。
+  const showPageLabel = new ObservableBoolean(false);
 
   function refresh(): void {
-    const all = listActiveOrders(networkId).filter((order) => !cancelledIds.has(order.requestId));
+    const all = fetchAll().filter((item) => !cancelledIds.has(getRequestId(item)));
     const totalPages = Math.max(1, Math.ceil(all.length / ROW_COUNT));
     currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
 
     filtered = all.slice(currentPage * ROW_COUNT, (currentPage + 1) * ROW_COUNT);
     for (let i = 0; i < ROW_COUNT; i++) {
-      const order = filtered[i];
-      rowVisible[i].setData(!!order);
-      rowLabels[i].setData(order ? orderLabel(order, dimension) : { text: "" });
-      rowTooltips[i].setData(order ? orderTooltip(order) : { text: "" });
+      const item = filtered[i];
+      rowVisible[i].setData(!!item);
+      rowLabels[i].setData(item ? label(item) : { text: "" });
+      rowTooltips[i].setData(item ? tooltip(item) : { text: "" });
     }
 
     hasPrevPage.setData(currentPage > 0);
     hasNextPage.setData(currentPage < totalPages - 1);
     pageLabel.setData(`${currentPage + 1} / ${totalPages} ページ`);
+    showPageLabel.setData(totalPages > 1);
   }
 
   tabVisible.subscribe((active) => {
@@ -96,11 +104,12 @@ function setupStatusTab(
       // タブ非表示中はページャーボタンも隠す(AND合成が無いための対処、他タブと同じ)。
       hasPrevPage.setData(false);
       hasNextPage.setData(false);
+      showPageLabel.setData(false);
     }
   });
 
-  form.label("進行中の引き出しの一覧です。タップでキャンセルします。", { visible: tabVisible });
-  form.label(pageLabel, { visible: tabVisible });
+  form.label(headerText, { visible: tabVisible });
+  form.label(pageLabel, { visible: showPageLabel });
 
   form.button(
     "▲ 前のページ",
@@ -112,27 +121,26 @@ function setupStatusTab(
   );
 
   for (let i = 0; i < ROW_COUNT; i++) {
-    const label = new ObservableUIRawMessage({ text: "" });
-    const tooltip = new ObservableUIRawMessage({ text: "" });
+    const rowLabel = new ObservableUIRawMessage({ text: "" });
+    const rowTooltip = new ObservableUIRawMessage({ text: "" });
     const visible = new ObservableBoolean(false);
-    rowLabels.push(label);
-    rowTooltips.push(tooltip);
+    rowLabels.push(rowLabel);
+    rowTooltips.push(rowTooltip);
     rowVisible.push(visible);
     tabVisible.subscribe((active) => {
       if (!active) visible.setData(false);
     });
 
     form.button(
-      label,
+      rowLabel,
       () => {
-        const order = filtered[i];
-        if (!order) return;
-        cancelOrder(networkId, order.requestId);
-        cancelledIds.add(order.requestId);
-        player.sendMessage(`§e引き出し #${order.id} をキャンセルしました。`);
+        const item = filtered[i];
+        if (!item) return;
+        onCancel(item);
+        cancelledIds.add(getRequestId(item));
         refresh();
       },
-      { visible, tooltip }
+      { visible, tooltip: rowTooltip }
     );
   }
 
@@ -145,14 +153,71 @@ function setupStatusTab(
     { visible: hasNextPage }
   );
 
+  // tabVisible.subscribeは値が変化した時にしか発火せず、状況タブは既定で表示中(true)の
+  // ままフォームが開くため、これが無いと最初のrefresh()が5秒周期の自動更新まで呼ばれず、
+  // 開いた直後は一覧が空に見えてしまう(実機で発見・修正)。他のページャー付き一覧
+  // (terminalUi.ts/autoTerminalUi.ts)と同じ、開いた時点での明示的な初期表示。
+  if (tabVisible.getData()) refresh();
+
   // タブを開いている間、一覧を定期的に自動更新する(他プレイヤーの操作や自動端末による
-  // 新規引き出し・進捗の変化を反映するため)。タイマーの停止はshowControllerUi側で行う。
+  // 新規リクエスト・進捗の変化を反映するため)。タイマーの停止はshowControllerUi側で行う。
   return system.runInterval(() => {
     if (tabVisible.getData()) refresh();
   }, STATUS_REFRESH_INTERVAL_TICKS);
 }
 
-// 素手(レンチ以外)でコントローラを右クリックした時のUI。「整理」「状況」「設定」の
+function setupOrderStatusSection(
+  form: CustomForm,
+  tabVisible: ObservableBoolean,
+  dimension: Dimension,
+  player: Player,
+  networkId: string
+): number {
+  return setupCancellableList<Order>(
+    form,
+    tabVisible,
+    "引き出し§7（タップでキャンセル）",
+    () => listActiveOrders(networkId),
+    (order) => order.requestId,
+    (order) => {
+      const terminalName = getTerminalName(dimension, order.terminal) ?? "端末";
+      const who = order.playerName || "自動";
+      return { text: `#${order.id} ${terminalName} (${who})` };
+    },
+    (order) => progressTooltip(order.lines, "タップでキャンセルします(配送済みの分は返送されません)。"),
+    (order) => {
+      cancelOrder(networkId, order.requestId);
+      player.sendMessage(`§e引き出し #${order.id} をキャンセルしました。`);
+    }
+  );
+}
+
+function setupDepositStatusSection(
+  form: CustomForm,
+  tabVisible: ObservableBoolean,
+  dimension: Dimension,
+  player: Player,
+  networkId: string
+): number {
+  return setupCancellableList<DepositRequest>(
+    form,
+    tabVisible,
+    "預け入れ§7（タップでキャンセル）",
+    () => listActiveDeposits(networkId),
+    (request) => request.id,
+    (request) => {
+      const terminalName = getTerminalName(dimension, request.terminal) ?? "端末";
+      return { text: terminalName };
+    },
+    (request) => progressTooltip(request.lines, "タップでキャンセルします(格納済みの分は返送されません)。"),
+    (request) => {
+      cancelDeposit(networkId, request.id);
+      player.sendMessage("§e預け入れをキャンセルしました。");
+    }
+  );
+}
+
+// 素手(レンチ以外)でコントローラを右クリックした時のUI。「状況」「整理」「設定」の
 // 3タブ構成(terminalUi.ts/autoTerminalUi.tsと同じく、タブの選択はdropdownで行う)。
 export function showControllerUi(player: Player, block: Block): void {
   const dimension = block.dimension;
@@ -203,7 +268,9 @@ export function showControllerUi(player: Player, block: Block): void {
     { visible: isOrganizeTab }
   );
 
-  const statusRefreshTimer = setupStatusTab(form, isStatusTab, dimension, player, network.id);
+  const orderStatusRefreshTimer = setupOrderStatusSection(form, isStatusTab, dimension, player, network.id);
+  form.divider({ visible: isStatusTab });
+  const depositStatusRefreshTimer = setupDepositStatusSection(form, isStatusTab, dimension, player, network.id);
 
   const notifyOnComplete = new ObservableBoolean(getNotifyOnOrganizeComplete(dimension, block.location), {
     clientWritable: true,
@@ -219,5 +286,8 @@ export function showControllerUi(player: Player, block: Block): void {
   form
     .show()
     .catch((e) => console.error(e))
-    .finally(() => system.clearRun(statusRefreshTimer));
+    .finally(() => {
+      system.clearRun(orderStatusRefreshTimer);
+      system.clearRun(depositStatusRefreshTimer);
+    });
 }

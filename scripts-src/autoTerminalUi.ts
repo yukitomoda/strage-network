@@ -49,6 +49,9 @@ function setupWishlistTab(
   const hasPrevPage = new ObservableBoolean(false);
   const hasNextPage = new ObservableBoolean(false);
   const pageLabel = new ObservableString("1 / 1 ページ");
+  // ページが1つしか無い(=ほぼ常にそう)場合にまで「1 / 1 ページ」を表示すると煩わしいため、
+  // 2ページ以上ある時だけ表示する。
+  const showPageLabel = new ObservableBoolean(false);
 
   const currentLabels: ObservableUIRawMessage[] = [];
   const currentVisible: ObservableBoolean[] = [];
@@ -84,6 +87,7 @@ function setupWishlistTab(
     hasPrevPage.setData(currentPage > 0);
     hasNextPage.setData(currentPage < totalPages - 1);
     pageLabel.setData(`${currentPage + 1} / ${totalPages} ページ`);
+    showPageLabel.setData(totalPages > 1);
   }
 
   // 上段の検索結果と表示形式を揃える(カスタム名が無ければlocalizationKeyで解決する)。
@@ -124,10 +128,11 @@ function setupWishlistTab(
     if (!active) {
       hasPrevPage.setData(false);
       hasNextPage.setData(false);
+      showPageLabel.setData(false);
     }
   });
 
-  form.label(pageLabel, { visible: tabVisible });
+  form.label(pageLabel, { visible: showPageLabel });
 
   form.button(
     "▲ 前のページ",

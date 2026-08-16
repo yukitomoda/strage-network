@@ -49,6 +49,9 @@ function setupTab(
   const hasPrevPage = new ObservableBoolean(false);
   const hasNextPage = new ObservableBoolean(false);
   const pageLabel = new ObservableString("1 / 1 ページ");
+  // ページが1つしか無い(=ほぼ常にそう)場合にまで「1 / 1 ページ」を表示すると煩わしいため、
+  // 2ページ以上ある時だけ表示する。
+  const showPageLabel = new ObservableBoolean(false);
 
   // カートに入っている数量を「{カート数}/{在庫数} {品名}」の形で行ラベルに表示する
   // (下部の合計カート表示は不要になったため廃止した)。
@@ -78,6 +81,7 @@ function setupTab(
     hasPrevPage.setData(currentPage > 0);
     hasNextPage.setData(currentPage < totalPages - 1);
     pageLabel.setData(`${currentPage + 1} / ${totalPages} ページ`);
+    showPageLabel.setData(totalPages > 1);
   }
 
   // visible は「タブが選択中」と「絞り込みに引っかかっている」の両方を満たす時だけ true にしたいが、
@@ -100,10 +104,11 @@ function setupTab(
     if (!active) {
       hasPrevPage.setData(false);
       hasNextPage.setData(false);
+      showPageLabel.setData(false);
     }
   });
 
-  form.label(pageLabel, { visible: tabVisible });
+  form.label(pageLabel, { visible: showPageLabel });
 
   form.button(
     "▲ 前のページ",

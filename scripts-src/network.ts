@@ -38,6 +38,9 @@ function depositsKey(id: string): string {
 function depositIssuingKey(id: string): string {
   return `wh:deposit_issuing:${id}`;
 }
+function depositCancelsKey(id: string): string {
+  return `wh:deposit_cancels:${id}`;
+}
 function depositPartialKey(id: string): string {
   return `wh:deposit_partial:${id}`;
 }
@@ -92,6 +95,7 @@ export function destroyNetwork(id: string): void {
   clearProperty(partialKey(id));
   clearProperty(depositsKey(id));
   clearProperty(depositIssuingKey(id));
+  clearProperty(depositCancelsKey(id));
   clearProperty(depositPartialKey(id));
   clearProperty(organizeKey(id));
 }
@@ -297,6 +301,15 @@ export function getDepositIssuing(networkId: string): DepositIssuingEntry[] {
 
 export function setDepositIssuing(networkId: string, entries: DepositIssuingEntry[]): void {
   writeJson(depositIssuingKey(networkId), entries);
+}
+
+// キャンセル対象の預け入れrequestId一覧。orderCancels(network.ts)と全く同じ発想の専用キュー。
+export function getDepositCancels(networkId: string): string[] {
+  return readJson<string[]>(depositCancelsKey(networkId)) ?? [];
+}
+
+export function setDepositCancels(networkId: string, requestIds: string[]): void {
+  writeJson(depositCancelsKey(networkId), requestIds);
 }
 
 export function getDepositPartial(networkId: string): DepositPartialResult[] {
