@@ -47,6 +47,9 @@ function depositPartialKey(id: string): string {
 function organizeKey(id: string): string {
   return `wh:organize:${id}`;
 }
+function organizeCancelsKey(id: string): string {
+  return `wh:organize_cancels:${id}`;
+}
 
 export function getNetworkIds(): string[] {
   return readJson<string[]>(NETWORK_IDS_KEY) ?? [];
@@ -98,6 +101,7 @@ export function destroyNetwork(id: string): void {
   clearProperty(depositCancelsKey(id));
   clearProperty(depositPartialKey(id));
   clearProperty(organizeKey(id));
+  clearProperty(organizeCancelsKey(id));
 }
 
 export function findNetworkByController(dimensionId: string, loc: Vector3): NetworkData | undefined {
@@ -330,4 +334,13 @@ export function getOrganizeQueue(networkId: string): OrganizeRequest[] {
 
 export function setOrganizeQueue(networkId: string, requests: OrganizeRequest[]): void {
   writeJson(organizeKey(networkId), requests);
+}
+
+// キャンセル対象の整理requestId一覧。orderCancels/depositCancelsと全く同じ発想の専用キュー。
+export function getOrganizeCancels(networkId: string): string[] {
+  return readJson<string[]>(organizeCancelsKey(networkId)) ?? [];
+}
+
+export function setOrganizeCancels(networkId: string, requestIds: string[]): void {
+  writeJson(organizeCancelsKey(networkId), requestIds);
 }

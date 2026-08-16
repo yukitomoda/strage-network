@@ -92,7 +92,8 @@ export type OrganizeLine = {
 };
 
 export type OrganizeRequest = {
-  id: string;
+  id: string; // 厳密な一意ID(generateId()。キャンセル指定に使う、表示には使わない)
+  displayId: string; // 表示用ID(generateOrganizeId()。Order.id/DepositRequest.displayIdと同じ)
   playerName: string; // 完了通知の送り先を後から探すため(Order.playerNameと同じ考え方)
   lines: OrganizeLine[];
 };
@@ -118,6 +119,11 @@ export function generateOrderId(): string {
 // 預け入れの表示用ID。引き出しとひと目で見分けられるよう接頭辞を変えている。
 export function generateDepositId(): string {
   return `DEP-${generateShortCode()}`;
+}
+
+// 整理の表示用ID。同上。
+export function generateOrganizeId(): string {
+  return `ORG-${generateShortCode()}`;
 }
 
 // ターミナルの初期名。設定タブでいつでも変更できる前提の、区別のためだけの仮名。

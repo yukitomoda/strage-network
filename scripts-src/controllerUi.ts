@@ -11,8 +11,8 @@ import { getNotifyOnOrganizeComplete, setNotifyOnOrganizeComplete } from "./cont
 import { cancelDeposit, listActiveDeposits } from "./depositProcessing";
 import { findNetworkByController } from "./network";
 import { cancelOrder, listActiveOrders } from "./orderProcessing";
-import { submitOrganize } from "./organizeProcessing";
-import { DepositRequest, Order } from "./state";
+import { cancelOrganize, listActiveOrganize, submitOrganize } from "./organizeProcessing";
+import { DepositRequest, Order, OrganizeRequest } from "./state";
 import { scanCatalog } from "./storageScan";
 import { getTerminalName } from "./terminalSettings";
 
@@ -218,6 +218,39 @@ function setupDepositStatusSection(
   );
 }
 
+// 整理は引き出し/預け入れと違い品目ごとの数量進捗を持たない(OrganizeLineは`done`のみ)ため、
+// 品目数ベースの進捗(何品目中何品目が完了したか)で表示する。また搬入出先の端末という
+// 概念も無いため、ラベルに端末名は含まれない。
+function setupOrganizeStatusSection(
+  form: CustomForm,
+  tabVisible: ObservableBoolean,
+  player: Player,
+  networkId: string
+): number {
+  return setupCancellableList<OrganizeRequest>(
+    form,
+    tabVisible,
+    "整理§7（タップでキャンセル）",
+    () => listActiveOrganize(networkId),
+    (request) => request.id,
+    (request) => {
+      const done = request.lines.filter((l) => l.done).length;
+      const who = request.playerName || "自動";
+      return { text: `#${request.displayId} 整理(${done}/${request.lines.length}品目) (${who})` };
+    },
+    (request) => {
+      const done = request.lines.filter((l) => l.done).length;
+      return {
+        text: `§b進捗: ${done}/${request.lines.length} 品目\n§7タップでキャンセルします(整理済みの分は元に戻りません)。`,
+      };
+    },
+    (request) => {
+      cancelOrganize(networkId, request.id);
+      player.sendMessage(`§e倉庫の整理 #${request.displayId} をキャンセルしました。`);
+    }
+  );
+}
+
 // 素手(レンチ以外)でコントローラを右クリックした時のUI。「状況」「整理」「設定」の
 // 3タブ構成(terminalUi.ts/autoTerminalUi.tsと同じく、タブの選択はdropdownで行う)。
 export function showControllerUi(player: Player, block: Block): void {
@@ -259,12 +292,14 @@ export function showControllerUi(player: Player, block: Block): void {
         player.sendMessage("§e整理対象のアイテムがありません。");
         return;
       }
-      const started = submitOrganize(
+      const organizeId = submitOrganize(
         network.id,
         player.name,
         catalog.map((entry) => ({ itemTypeId: entry.key.typeId, itemName: entry.key.name }))
       );
-      player.sendMessage(started ? "§b倉庫の整理をキューに追加しました。" : "§eすでに整理中です。");
+      player.sendMessage(
+        organizeId ? `§b倉庫の整理 #${organizeId} をキューに追加しました。` : "§eすでに整理中です。"
+      );
     },
     { visible: isOrganizeTab }
   );
@@ -272,6 +307,8 @@ export function showControllerUi(player: Player, block: Block): void {
   const orderStatusRefreshTimer = setupOrderStatusSection(form, isStatusTab, dimension, player, network.id);
   form.divider({ visible: isStatusTab });
   const depositStatusRefreshTimer = setupDepositStatusSection(form, isStatusTab, dimension, player, network.id);
+  form.divider({ visible: isStatusTab });
+  const organizeStatusRefreshTimer = setupOrganizeStatusSection(form, isStatusTab, player, network.id);
 
   const notifyOnComplete = new ObservableBoolean(getNotifyOnOrganizeComplete(dimension, block.location), {
     clientWritable: true,
@@ -290,5 +327,6 @@ export function showControllerUi(player: Player, block: Block): void {
     .finally(() => {
       system.clearRun(orderStatusRefreshTimer);
       system.clearRun(depositStatusRefreshTimer);
+      system.clearRun(organizeStatusRefreshTimer);
     });
 }

@@ -1,8 +1,8 @@
 import { Dimension, Vector3, world } from "@minecraft/server";
 import { getNotifyOnOrganizeComplete } from "./controllerSettings";
 import { DisplayKey, stackMatchesKey } from "./itemIdentity";
-import { getOrganizeQueue, setOrganizeQueue } from "./network";
-import { generateId, NetworkData, OrganizeLine, OrganizeRequest } from "./state";
+import { getOrganizeCancels, getOrganizeQueue, setOrganizeCancels, setOrganizeQueue } from "./network";
+import { generateId, generateOrganizeId, NetworkData, OrganizeLine, OrganizeRequest } from "./state";
 import { getDrain } from "./storageSettings";
 import { insertIntoStorages } from "./storageScan";
 
@@ -14,24 +14,55 @@ const ORGANIZE_THROUGHPUT_PER_TICK = 100;
 // ネットワークにつき同時に1件まで。整理中に再度ボタンを押しても、既存のリクエストが
 // 終わるまでは何も起きない(整理はスナップショット時点の品目を対象にするだけの
 // ワンショットの処理で、キューに複数積んでも得るものが無いため)。
+// 戻り値のdisplayIdはプレイヤーへの表示用(submitOrder/submitDepositと同じ役割)。
+// 既に整理中で新規キューイングを弾いた場合はundefinedを返す。
 export function submitOrganize(
   networkId: string,
   playerName: string,
   lines: { itemTypeId: string; itemName?: string }[]
-): boolean {
-  if (lines.length === 0) return false;
-  if (getOrganizeQueue(networkId).length > 0) return false;
+): string | undefined {
+  if (lines.length === 0) return undefined;
+  if (getOrganizeQueue(networkId).length > 0) return undefined;
 
   const request: OrganizeRequest = {
     id: generateId(),
+    displayId: generateOrganizeId(),
     playerName,
     lines: lines.map((l) => ({ itemTypeId: l.itemTypeId, itemName: l.itemName, done: false })),
   };
   setOrganizeQueue(networkId, [request]);
-  return true;
+  return request.displayId;
+}
+
+// コントローラの「状況」タブ(controllerUi.ts)向け: orderProcessing.tsのlistActiveOrdersと
+// 同じ考え方。整理は同時に1件までなので、実質0件か1件の配列になる。
+export function listActiveOrganize(networkId: string): OrganizeRequest[] {
+  return getOrganizeQueue(networkId);
+}
+
+// orderProcessing.tsのcancelOrderと同じ発想の専用キャンセルキュー。
+export function cancelOrganize(networkId: string, requestId: string): void {
+  const cancels = getOrganizeCancels(networkId);
+  cancels.push(requestId);
+  setOrganizeCancels(networkId, cancels);
+}
+
+// orderProcessing.tsのprocessOrderCancelsと同じ発想。整理には発行待ち(issuing)相当の
+// ステージング queue が無く`wh:organize`一本なので、そこだけ除去すればよい。
+function processOrganizeCancels(networkId: string): void {
+  const cancelIds = getOrganizeCancels(networkId);
+  if (cancelIds.length === 0) return;
+  const cancelSet = new Set(cancelIds);
+
+  const queue = getOrganizeQueue(networkId).filter((request) => !cancelSet.has(request.id));
+  setOrganizeQueue(networkId, queue);
+
+  setOrganizeCancels(networkId, []); // 消費済み
 }
 
 export function processNetworkOrganize(network: NetworkData): void {
+  processOrganizeCancels(network.id);
+
   let queue = getOrganizeQueue(network.id);
   if (queue.length === 0) return;
 
@@ -124,8 +155,8 @@ function notifyOrganizeComplete(
 
   player.sendMessage(
     leftover
-      ? "§e倉庫の整理が完了しました(退避先の空き不足で一部の品目は整理できませんでした)。"
-      : "§b倉庫の整理が完了しました。"
+      ? `§e倉庫の整理 #${request.displayId} が完了しました(退避先の空き不足で一部の品目は整理できませんでした)。`
+      : `§b倉庫の整理 #${request.displayId} が完了しました。`
   );
 }
 
