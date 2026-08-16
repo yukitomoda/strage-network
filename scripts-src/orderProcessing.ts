@@ -1,7 +1,15 @@
 import { Dimension, system, Vector3, world } from "@minecraft/server";
-import { appendPartial, getIssuing, getOrders, setIssuing, setOrders } from "./network";
+import {
+  appendPartial,
+  getIssuing,
+  getOrderCancels,
+  getOrders,
+  setIssuing,
+  setOrderCancels,
+  setOrders,
+} from "./network";
 import { extractFromStorages } from "./storageScan";
-import { generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
+import { generateId, generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
 import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
 
@@ -13,16 +21,50 @@ const ISSUE_DELAY_TICKS = 0;
 
 // 戻り値の id はプレイヤーへの表示用(引き出し確定時のメッセージ、完了通知に使う)。
 export function submitOrder(networkId: string, terminalLoc: Vector3, playerName: string, lines: OrderLine[]): string {
-  const order: Order = { id: generateOrderId(), playerName, terminal: terminalLoc, lines };
+  const order: Order = { id: generateOrderId(), requestId: generateId(), playerName, terminal: terminalLoc, lines };
   const entries = getIssuing(networkId);
   entries.push({ order, readyAtTick: system.currentTick + ISSUE_DELAY_TICKS });
   setIssuing(networkId, entries);
   return order.id;
 }
 
+// コントローラの「状況」タブ(controllerUi.ts)向け: 発行待ち(issuing)・処理中(orders)を
+// 合わせた「まだ完了していない引き出し」一覧。hasPendingOrderFor(autoOrderCheck.ts)と
+// 同じ「両方見る」考え方。
+export function listActiveOrders(networkId: string): Order[] {
+  return [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
+}
+
+// requestId(厳密な一意ID。表示用の緩いidとは別物)を指定して引き出しをキャンセルする。
+// 即座には取り消さず、専用のキャンセルキューに積むだけにする(processNetworkOrdersが
+// 次回実行時の先頭で優先的に処理する)。
+export function cancelOrder(networkId: string, requestId: string): void {
+  const cancels = getOrderCancels(networkId);
+  cancels.push(requestId);
+  setOrderCancels(networkId, cancels);
+}
+
+// キャンセル要求を、通常の引き出し処理より先に消費する。issuing(発行待ち)・orders(処理中の
+// FIFO)のどちらに居ても、次にそれが処理される前に確実に取り除けるように、両方から探す。
+// 巻き戻しは行わない: 既に配送済みの分はそのまま、残りの未処理ラインだけが無かったことになる。
+function processOrderCancels(network: NetworkData): void {
+  const cancelIds = getOrderCancels(network.id);
+  if (cancelIds.length === 0) return;
+  const cancelSet = new Set(cancelIds);
+
+  const issuing = getIssuing(network.id).filter((entry) => !cancelSet.has(entry.order.requestId));
+  setIssuing(network.id, issuing);
+
+  const orders = getOrders(network.id).filter((order) => !cancelSet.has(order.requestId));
+  setOrders(network.id, orders);
+
+  setOrderCancels(network.id, []); // 消費済み
+}
+
 export function processNetworkOrders(network: NetworkData): void {
   const dimension = world.getDimension(network.dimensionId);
 
+  processOrderCancels(network);
   moveReadyIssuingEntries(network);
 
   let budget = THROUGHPUT_PER_TICK;

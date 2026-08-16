@@ -23,6 +23,7 @@ export type OrderLine = {
 
 export type Order = {
   id: string; // 短い表示用ID。マルチプレイでの識別用途なので厳密な一意性は不要
+  requestId: string; // キャンセル指定用の厳密な一意ID(generateId()。表示には使わない)
   playerName: string; // 完了通知の送り先を後から探すため(Entity.idはセッションをまたいで安定しない)
   terminal: Vector3;
   lines: OrderLine[];

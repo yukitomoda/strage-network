@@ -26,6 +26,9 @@ function ordersKey(id: string): string {
 function issuingKey(id: string): string {
   return `wh:issuing:${id}`;
 }
+function orderCancelsKey(id: string): string {
+  return `wh:order_cancels:${id}`;
+}
 function partialKey(id: string): string {
   return `wh:partial:${id}`;
 }
@@ -85,6 +88,7 @@ export function destroyNetwork(id: string): void {
   clearProperty(networkKey(id));
   clearProperty(ordersKey(id));
   clearProperty(issuingKey(id));
+  clearProperty(orderCancelsKey(id));
   clearProperty(partialKey(id));
   clearProperty(depositsKey(id));
   clearProperty(depositIssuingKey(id));
@@ -257,6 +261,16 @@ export function getIssuing(networkId: string): IssuingEntry[] {
 
 export function setIssuing(networkId: string, entries: IssuingEntry[]): void {
   writeJson(issuingKey(networkId), entries);
+}
+
+// キャンセル対象の引き出しrequestId一覧。通常のorders/issuingキューとは別の専用キューにして、
+// processNetworkOrdersが毎tickの先頭で優先的に(=通常の処理順を待たず)消費する。
+export function getOrderCancels(networkId: string): string[] {
+  return readJson<string[]>(orderCancelsKey(networkId)) ?? [];
+}
+
+export function setOrderCancels(networkId: string, requestIds: string[]): void {
+  writeJson(orderCancelsKey(networkId), requestIds);
 }
 
 export function getPartial(networkId: string): PartialResult[] {
