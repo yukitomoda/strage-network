@@ -80,6 +80,27 @@ function rangeIndicatorColorAt() {
   return [80, 160, 255, 90];
 }
 
+// PoC用: 実アイテムのアイコンを完全透過にして、コンテナスロット本体は見えなくし、
+// 別レイヤーの装飾画像だけを見せる実験に使う(orderClickPoc.ts参照)。
+function blankColorAt() {
+  return [0, 0, 0, 0];
+}
+
+// PoC用: 注文クリックのテストで商品ごとに見分けが付くよう、はっきり異なる色の単色アイコン。
+function orderIconColorAt(r, g, b) {
+  return (u, v) => {
+    const dx = Math.abs(u - 0.5);
+    const dy = Math.abs(v - 0.5);
+    if (dx > 0.42 || dy > 0.42) return [0, 0, 0, 0];
+    return [r, g, b, 255];
+  };
+}
+
+// PoC用: 検索ボックスで絞り込んだ際、一致しないアイテムに重ねて暗くする半透明オーバーレイ。
+function searchDimOverlayColorAt() {
+  return [0, 0, 0, 170];
+}
+
 function packIconColorAt(u, v) {
   const dx = Math.abs(u - 0.5);
   const dy = Math.abs(v - 0.5);
@@ -131,5 +152,12 @@ writePng("RP/textures/blocks/auto_terminal.png", 16, autoTerminalColorAt);
 writePng("RP/textures/blocks/inventory_terminal.png", 16, inventoryTerminalColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
+writePng("RP/textures/items/blank.png", 16, blankColorAt);
+writePng("RP/textures/items/order_icon_1.png", 16, orderIconColorAt(160, 160, 165)); // 丸石: グレー
+writePng("RP/textures/items/order_icon_2.png", 16, orderIconColorAt(80, 210, 230)); // ダイヤモンド: シアン
+writePng("RP/textures/items/order_icon_3.png", 16, orderIconColorAt(150, 100, 60)); // オークの原木: 茶色
+writePng("RP/textures/items/order_icon_4.png", 16, orderIconColorAt(210, 210, 220)); // 鉄インゴット: 白銀
+writePng("RP/textures/items/order_icon_5.png", 16, orderIconColorAt(230, 200, 60)); // 金インゴット: 金色
+writePng("RP/textures/items/search_dim_overlay.png", 16, searchDimOverlayColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);
 writePng("BP/pack_icon.png", 128, packIconColorAt);

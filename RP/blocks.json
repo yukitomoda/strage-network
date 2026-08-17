@@ -11,5 +11,11 @@
   },
   "wh:inventory_terminal": {
     "sound": "wood"
+  },
+  "wh:test_chest_screen_block": {
+    "sound": "stone"
+  },
+  "wh:test_chest_screen_terminal_block": {
+    "sound": "wood"
   }
 }

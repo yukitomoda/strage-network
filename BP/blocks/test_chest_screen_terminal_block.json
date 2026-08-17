@@ -1,0 +1,36 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wh:test_chest_screen_terminal_block",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:geometry": "geometry.terminal_panel_north",
+      "minecraft:material_instances": {
+        "*": { "texture": "wh:terminal" }
+      },
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 2
+      },
+      "minecraft:map_color": "#78c8aa",
+      "minecraft:collision_box": false,
+
+      "minecraft:selection_box": {
+        "origin": [
+          -7,
+          1,
+          6
+        ],
+        "size": [
+          14,
+          14,
+          2
+        ]
+      },
+      "minecraft:custom_components": [ "wh:test_chest_screen_terminal_block" ]
+    }
+  }
+}

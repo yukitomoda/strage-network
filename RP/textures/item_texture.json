@@ -4,6 +4,9 @@
   "texture_data": {
     "wh_wrench": {
       "textures": "textures/items/wrench"
+    },
+    "wh_blank": {
+      "textures": "textures/items/blank"
     }
   }
 }
