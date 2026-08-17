@@ -223,13 +223,6 @@ function setupDepositTab(
     });
     summaryLabel.setData({ rawtext: parts });
   }
-
-  tabVisible.subscribe((active) => {
-    if (active) refreshSummary();
-  });
-  if (tabVisible.getData()) refreshSummary();
-
-  form.label(summaryLabel, { visible: tabVisible });
   form.button(
     "すべて預け入れ",
     () => {
@@ -250,6 +243,13 @@ function setupDepositTab(
     },
     { visible: tabVisible }
   );
+
+  tabVisible.subscribe((active) => {
+    if (active) refreshSummary();
+  });
+  if (tabVisible.getData()) refreshSummary();
+
+  form.label(summaryLabel, { visible: tabVisible });
 }
 
 // 設定タブ: ターミナルごとのローカル設定(現状は完了通知の有無のみ)。ブロック自体は
