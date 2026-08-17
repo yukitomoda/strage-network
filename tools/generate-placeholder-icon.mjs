@@ -173,6 +173,36 @@ const autoTerminalColorAt = terminalFamilyColorAt([255, 195, 120], [130, 80, 20]
 // 在庫管理ターミナル: 同じ構図だが、スクリーンが紫系で他の2種と見分けが付く
 const inventoryTerminalColorAt = terminalFamilyColorAt([200, 165, 245], [80, 55, 120]);
 
+// インベントリ等で使う、正面から見た単純な2Dアイコン(ブロックの3Dモデル用テクスチャとは
+// 別ファイル)。手に持った時やクリエイティブインベントリの見た目はこちらが使われるように
+// 各ブロックのBP側で`minecraft:icon`として登録する。3Dモデル側のBox UVテクスチャ
+// (controller.png/terminal.png等)は変更しない。
+function flatTerminalIconColorAt(screenTop, screenBottom) {
+  return (u, v) => {
+    const bevel = edgeBevel(u, v, 0.08);
+    let [r, g, b] = [70, 72, 78];
+    if (bevel === 1) [r, g, b] = [r + 20, g + 20, b + 20];
+    else if (bevel === -1) [r, g, b] = [r - 16, g - 16, b - 16];
+
+    const inScreen = u >= 0.16 && u <= 0.84 && v >= 0.16 && v <= 0.84;
+    if (inScreen) {
+      const t = 1 - (v - 0.16) / 0.68;
+      r = screenBottom[0] + (screenTop[0] - screenBottom[0]) * t;
+      g = screenBottom[1] + (screenTop[1] - screenBottom[1]) * t;
+      b = screenBottom[2] + (screenTop[2] - screenBottom[2]) * t;
+    }
+
+    if (Math.hypot(u - 0.82, v - 0.86) < 0.06) [r, g, b] = [255, 90, 90];
+
+    const n = (hashNoise(u, v) - 0.5) * 6;
+    return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+  };
+}
+
+const terminalIconColorAt = flatTerminalIconColorAt([170, 235, 210], [40, 95, 80]);
+const autoTerminalIconColorAt = flatTerminalIconColorAt([255, 195, 120], [130, 80, 20]);
+const inventoryTerminalIconColorAt = flatTerminalIconColorAt([200, 165, 245], [80, 55, 120]);
+
 // レンチアイテム: 透過背景に単純な十字(スパナ風)アイコン
 function wrenchColorAt(u, v) {
   const dx = u - 0.5;
@@ -238,6 +268,9 @@ writePng("RP/textures/blocks/controller.png", 32, controllerColorAt);
 writePng("RP/textures/blocks/terminal.png", 32, terminalColorAt);
 writePng("RP/textures/blocks/auto_terminal.png", 32, autoTerminalColorAt);
 writePng("RP/textures/blocks/inventory_terminal.png", 32, inventoryTerminalColorAt);
+writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
+writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
+writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);

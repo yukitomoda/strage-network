@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:auto_terminal",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_auto_terminal_icon",
+      "minecraft:block_placer": {
+        "block": "wh:auto_terminal"
+      },
+      "minecraft:display_name": {
+        "value": "tile.wh:auto_terminal.name"
+      }
+    }
+  }
+}

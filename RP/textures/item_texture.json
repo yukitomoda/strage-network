@@ -4,6 +4,15 @@
   "texture_data": {
     "wh_wrench": {
       "textures": "textures/items/wrench"
+    },
+    "wh_terminal_icon": {
+      "textures": "textures/blocks/terminal_icon"
+    },
+    "wh_auto_terminal_icon": {
+      "textures": "textures/blocks/auto_terminal_icon"
+    },
+    "wh_inventory_terminal_icon": {
+      "textures": "textures/blocks/inventory_terminal_icon"
     }
   }
 }

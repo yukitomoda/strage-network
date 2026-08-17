@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:inventory_terminal",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_inventory_terminal_icon",
+      "minecraft:block_placer": {
+        "block": "wh:inventory_terminal"
+      },
+      "minecraft:display_name": {
+        "value": "tile.wh:inventory_terminal.name"
+      }
+    }
+  }
+}
