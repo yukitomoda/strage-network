@@ -1,25 +1,32 @@
 import { Block, Player, system } from "@minecraft/server";
-import { CustomForm, ObservableBoolean, ObservableNumber } from "@minecraft/server-ui";
+import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } from "@minecraft/server-ui";
+import { CONTROLLER_AXES, CONTROLLER_SPEED_AXIS } from "./controllerAxes";
 import { getNotifyOnOrganizeComplete, setNotifyOnOrganizeComplete } from "./controllerSettings";
-import { DEPOSIT_THROUGHPUT_PER_CYCLE, listActiveDeposits } from "./depositProcessing";
+import { getDepositThroughput, listActiveDeposits } from "./depositProcessing";
 import { findNetworkByController } from "./network";
 import { NETWORK_PROCESSING_INTERVAL_TICKS } from "./networkProcessing";
-import { listActiveOrders, ORDER_THROUGHPUT_PER_CYCLE } from "./orderProcessing";
-import { listActiveOrganize, ORGANIZE_THROUGHPUT_PER_CYCLE, submitOrganize } from "./organizeProcessing";
+import { getOrderThroughput, listActiveOrders } from "./orderProcessing";
+import { getOrganizeThroughput, listActiveOrganize, submitOrganize } from "./organizeProcessing";
 import { scanCatalog } from "./storageScan";
 import { setupDepositStatusSection, setupOrderStatusSection, setupOrganizeStatusSection } from "./statusListUi";
+import { getAxisMaxTier, getAxisTier, giveOrDropKits, setAxisTier, UpgradeAxis } from "./upgrade";
 
 // コントローラのタスク処理ループは、Minecraftのサーバーtick20回につき1回だけ実行される
-// (NETWORK_PROCESSING_INTERVAL_TICKS)。各処理の「スループット」定数はこのループ1回あたりの
-// 予算であり、サーバーtick単位のレートではない。「/tick」のような換算後の値だけを見せると、
+// (NETWORK_PROCESSING_INTERVAL_TICKS)。各処理の「スループット」(コントローラの速度アップグレード
+// 軸のTierに応じて変わる)はこのループ1回あたりの予算であり、サーバーtick単位のレートではない。
+// 「/tick」のような換算後の値だけを見せると、
 // あたかもサーバーtickごとのレートであるかのように誤解を招く(実機での指摘を受けた修正)ため、
 // 分母のサーバーtick数(=1サイクルが何tickか)もそのまま併記する形にしている。
 function throughputLabel(throughputPerCycle: number): string {
   return `${throughputPerCycle}/${NETWORK_PROCESSING_INTERVAL_TICKS}tick`;
 }
 
-// 素手(レンチ以外)でコントローラを右クリックした時のUI。「状況」「整理」「設定」の
-// 3タブ構成(terminalUi.ts/autoTerminalUi.tsと同じく、タブの選択はdropdownで行う)。
+function formatAxisTierLabel(axis: UpgradeAxis, tier: number): string {
+  return `${axis.label} Tier ${tier} / ${getAxisMaxTier(axis)}`;
+}
+
+// 素手(レンチ以外)でコントローラを右クリックした時のUI。「状況」「整理」「アップグレード」
+// 「設定」の4タブ構成(terminalUi.ts/autoTerminalUi.tsと同じく、タブの選択はdropdownで行う)。
 export function showControllerUi(player: Player, block: Block): void {
   const dimension = block.dimension;
   const network = findNetworkByController(dimension.id, block.location);
@@ -31,20 +38,25 @@ export function showControllerUi(player: Player, block: Block): void {
   // ドロップダウンの表示順・開いた直後のデフォルトタブのどちらも「状況」(value=0)。
   const isOrganizeTab = new ObservableBoolean(false);
   const isStatusTab = new ObservableBoolean(true);
+  const isUpgradeTab = new ObservableBoolean(false);
   const isSettingsTab = new ObservableBoolean(false);
 
   const tabSelection = new ObservableNumber(0, { clientWritable: true });
   tabSelection.subscribe((index) => {
     isStatusTab.setData(index === 0);
     isOrganizeTab.setData(index === 1);
-    isSettingsTab.setData(index === 2);
+    isUpgradeTab.setData(index === 2);
+    isSettingsTab.setData(index === 3);
   });
+
+  const speedTier = getAxisTier(dimension, block.location, CONTROLLER_SPEED_AXIS);
 
   const form = new CustomForm(player, "倉庫コントローラ");
   form.dropdown("", tabSelection, [
     { label: "状況", value: 0 },
     { label: "整理", value: 1 },
-    { label: "設定", value: 2 },
+    { label: "アップグレード", value: 2 },
+    { label: "設定", value: 3 },
   ]);
   form.divider();
 
@@ -76,7 +88,7 @@ export function showControllerUi(player: Player, block: Block): void {
   // 「値/サイクルのtick数」の形式で表示する(MVPでは固定値、将来はグレードに応じて
   // 可変にする想定。docs/design.md 4章「スループット制」参照)。整理は搬入出先の
   // ターミナルを介さずストレージ間でアイテムを動かすだけなので「内部」と表示する。
-  form.label(`引き出し §7${throughputLabel(ORDER_THROUGHPUT_PER_CYCLE)}`, { visible: isStatusTab });
+  form.label(`引き出し §7${throughputLabel(getOrderThroughput(speedTier))}`, { visible: isStatusTab });
   const orderStatusRefreshTimer = setupOrderStatusSection(
     form,
     isStatusTab,
@@ -87,7 +99,7 @@ export function showControllerUi(player: Player, block: Block): void {
     false
   );
   form.divider({ visible: isStatusTab });
-  form.label(`預け入れ §7${throughputLabel(DEPOSIT_THROUGHPUT_PER_CYCLE)}`, { visible: isStatusTab });
+  form.label(`預け入れ §7${throughputLabel(getDepositThroughput(speedTier))}`, { visible: isStatusTab });
   const depositStatusRefreshTimer = setupDepositStatusSection(
     form,
     isStatusTab,
@@ -98,7 +110,7 @@ export function showControllerUi(player: Player, block: Block): void {
     false
   );
   form.divider({ visible: isStatusTab });
-  form.label(`内部 §7${throughputLabel(ORGANIZE_THROUGHPUT_PER_CYCLE)}`, { visible: isStatusTab });
+  form.label(`内部 §7${throughputLabel(getOrganizeThroughput(speedTier))}`, { visible: isStatusTab });
   const organizeStatusRefreshTimer = setupOrganizeStatusSection(
     form,
     isStatusTab,
@@ -107,6 +119,32 @@ export function showControllerUi(player: Player, block: Block): void {
     () => listActiveOrganize(network.id),
     false
   );
+
+  // 軸ごとに現在のTierと、装着済みのキットを取り出す(Tier0に戻す)ボタンを表示する。
+  // CONTROLLER_AXESをループするだけなので、将来「範囲」等の軸が増えても自動的に1行増える。
+  for (const axis of CONTROLLER_AXES) {
+    const initialTier = getAxisTier(dimension, block.location, axis);
+    // 開いた時点の値を素の文字列で渡すと、ボタンを押しても表示が更新されない(DDUIのCustomForm
+    // はObservable経由でしか再描画されない)ため、ObservableStringにしてsetData()で更新する。
+    const tierLabel = new ObservableString(formatAxisTierLabel(axis, initialTier));
+    // Tier0(アップグレード無し)の間はボタンを非活性にする。取り出した直後もtrueに戻す。
+    const isEmpty = new ObservableBoolean(initialTier === 0);
+    form.label(tierLabel, { visible: isUpgradeTab });
+    form.button(
+      `取り出す`,
+      () => {
+        const currentTier = getAxisTier(dimension, block.location, axis);
+        if (currentTier === 0) return; // 非活性化されているため通常は到達しない
+        giveOrDropKits(dimension, block.location, axis, currentTier, player);
+        setAxisTier(block, axis, 0);
+        tierLabel.setData(formatAxisTierLabel(axis, 0));
+        isEmpty.setData(true);
+        player.sendMessage(`§e${axis.label}のアップグレードキットを取り出しました。`);
+      },
+      { visible: isUpgradeTab, disabled: isEmpty }
+    );
+    form.divider({ visible: isUpgradeTab });
+  }
 
   const notifyOnComplete = new ObservableBoolean(getNotifyOnOrganizeComplete(dimension, block.location), {
     clientWritable: true,

@@ -8,6 +8,7 @@ import { startNetworkProcessingLoop } from "./networkProcessing";
 import { registerStorageBreakWatcher } from "./storageLifecycle";
 import { testFillerItemComponent } from "./testFiller";
 import { terminalBlockComponent } from "./terminalBlock";
+import { upgradeKitItemComponent } from "./upgradeKit";
 import { registerWrenchPlayerLeaveWatcher, startWrenchHighlightLoop, wrenchItemComponent } from "./wrench";
 
 system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRegistry }) => {
@@ -17,6 +18,7 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRe
   blockComponentRegistry.registerCustomComponent("wh:inventory_terminal", inventoryTerminalBlockComponent);
   itemComponentRegistry.registerCustomComponent("wh:wrench", wrenchItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:test_filler", testFillerItemComponent);
+  itemComponentRegistry.registerCustomComponent("wh:upgrade_kit", upgradeKitItemComponent);
 });
 
 registerStorageBreakWatcher();

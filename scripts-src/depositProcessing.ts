@@ -20,13 +20,19 @@ import {
 } from "./state";
 import { getDrain } from "./storageSettings";
 import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
+import { CONTROLLER_SPEED_AXIS } from "./controllerAxes";
+import { getAxisTier } from "./upgrade";
 
 // 引き出し(orderProcessing.ts)と対称だが、方向が逆(ターミナルの張り付いた先 -> ネットワーク内の
 // ストレージ群)で、スループット・発行遅延は個別に設定できるようにしている。
-// MVPでは両方とも十分大きい固定値/0で、実質即時処理になる。docs/design.md 4章参照。
-// コントローラUIの「状況」タブ表示用にexportしている(orderProcessing.tsのORDER_THROUGHPUT_PER_CYCLE
-// と同じく、Minecraftのサーバーtick単位のレートではなく処理ループ1回あたりの予算)。
-export const DEPOSIT_THROUGHPUT_PER_CYCLE = 1_0;
+// docs/design.md 4章参照。コントローラの速度アップグレード軸(tier0〜4)ごとの予算。
+// orderProcessing.tsのORDER_THROUGHPUT_BY_TIERと同じ値・同じ考え方(Minecraftのサーバーtick
+// 単位のレートではなく処理ループ1回あたりの予算)。
+const DEPOSIT_THROUGHPUT_BY_TIER = [128, 192, 384, 1024, 4096];
+// コントローラUIの「状況」タブ表示用にexportしている。
+export function getDepositThroughput(tier: number): number {
+  return DEPOSIT_THROUGHPUT_BY_TIER[tier] ?? DEPOSIT_THROUGHPUT_BY_TIER[DEPOSIT_THROUGHPUT_BY_TIER.length - 1];
+}
 const DEPOSIT_ISSUE_DELAY_TICKS = 0;
 
 // 戻り値のdisplayIdはプレイヤーへの表示用(submitOrderのidと同じ役割)。
@@ -105,7 +111,7 @@ export function processNetworkDeposits(network: NetworkData): void {
   processDepositCancels(network);
   moveReadyDepositIssuingEntries(network);
 
-  let budget = DEPOSIT_THROUGHPUT_PER_CYCLE;
+  let budget = getDepositThroughput(getAxisTier(dimension, network.controller, CONTROLLER_SPEED_AXIS));
   let requests = getDeposits(network.id);
   if (requests.length === 0) return;
 

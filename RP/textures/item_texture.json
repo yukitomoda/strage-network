@@ -13,6 +13,18 @@
     },
     "wh_inventory_terminal_icon": {
       "textures": "textures/blocks/inventory_terminal_icon"
+    },
+    "wh_speed_kit_copper": {
+      "textures": "textures/items/speed_kit_copper"
+    },
+    "wh_speed_kit_iron": {
+      "textures": "textures/items/speed_kit_iron"
+    },
+    "wh_speed_kit_diamond": {
+      "textures": "textures/items/speed_kit_diamond"
+    },
+    "wh_speed_kit_netherite": {
+      "textures": "textures/items/speed_kit_netherite"
     }
   }
 }

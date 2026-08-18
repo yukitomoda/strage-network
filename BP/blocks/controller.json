@@ -5,6 +5,9 @@
       "identifier": "wh:controller",
       "menu_category": {
         "category": "construction"
+      },
+      "states": {
+        "wh:speed_tier": [0, 1, 2, 3, 4]
       }
     },
     "components": {

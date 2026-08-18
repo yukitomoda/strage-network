@@ -247,11 +247,43 @@ runInterval(20 ticks) {
 - **専用の優先キュー**: キャンセル要求は通常の`wh:orders`/`wh:issuing`とは別の`wh:order_cancels:<networkId>`(`requestId`の配列)に積むだけの軽量な操作(`cancelOrder`)。`processNetworkOrders`は毎tickの先頭で(`moveReadyIssuingEntries`より前に)このキューを消費し、`wh:issuing`・`wh:orders`の両方から該当`requestId`を除去してから、通常の引き出し処理に進む。「専用キュー+毎tick先頭で優先処理」という構成により、次にその引き出しが処理される前に確実に取り除ける(通常のFIFOに割り込ませて優先度を上げる、というような複雑な仕組みは不要)。預け入れ側も`wh:deposit_cancels:<networkId>`/`cancelDeposit`/`processDepositCancels`として、整理側も`wh:organize_cancels:<networkId>`/`cancelOrganize`/`processOrganizeCancels`として全く同じ構成で実装した(整理は発行待ち(issuing)相当のステージングキューが無く`wh:organize`一本なので、そこだけ除去すればよい分、実装はやや単純)。
 - **UI側の即時反映**: 実際の除去は次tickまで反映されないため、コントローラUIの「状況」タブでは、キャンセルした`requestId`をUIセッション内の`Set`で覚えておき、一覧の再取得時にそこから除外することで、体感的には即座に一覧から消えるようにしている(引き出し・預け入れ・整理のセクションそれぞれが独立した`Set`を持つ)。
 
-### グレード管理(未実装、将来構想)
+### グレード管理: 複数軸に対応したアップグレード機構
 
-MVPでは`wh:controller`/`wh:terminal`にグレード(tier)を表すブロックステートは持たせておらず、スループット(`ORDER_THROUGHPUT_PER_CYCLE`/`DEPOSIT_THROUGHPUT_PER_CYCLE`/`ORGANIZE_THROUGHPUT_PER_CYCLE`)・発行遅延(`ISSUE_DELAY_TICKS`/`DEPOSIT_ISSUE_DELAY_TICKS`、いずれも0)は、各処理モジュール(`orderProcessing.ts`/`depositProcessing.ts`/`organizeProcessing.ts`)がエクスポートする固定の定数として直接持たせているだけで、グレードごとのテーブル参照は行っていない。
+実際に使ってみると、機能ごとに1グレードのアイテムしか無いのは窮屈だという要望を受け、以前の構想(整数ブロックステート`wh:tier`によるグレード管理)を、**1つのブロックが複数の独立した強化系統を同時に持てる**形に一般化して実装した。
 
-将来グレードを追加する場合は、`wh:controller` / `wh:terminal` に整数のブロックステート `wh:tier`（デフォルト0）を持たせ、`getThroughput(tier)` / `getIssueDelay(tier)` というテーブル参照関数を1箇所に用意する案を想定している。将来グレードを増やす際もテーブルに行を足すだけで済み、ブロックIDを増やすのではなく同一ブロックのステートにすることで、将来のアップグレード機構（レンチや専用アイテムでの格上げ等）も実装しやすくなる。
+**汎用の「アップグレード軸」抽象**(`upgrade.ts`)を用意し、ブロック種別に依存しない共通の型・関数にした。
+
+```ts
+type UpgradeAxis = {
+  id: string;            // 内部識別子(例: "controller_speed")
+  label: string;         // UI/メッセージ表示用の名前(例: "速度")
+  blockTypeId: string;   // このアップグレードが有効なブロックのtypeId
+  stateKey: string;      // このブロックが持つカスタムブロックステート名(例: "wh:speed_tier")
+  kitItemIds: string[];  // index i の要素 = Tier i -> i+1 に使うキットのアイテムtypeId
+};
+```
+
+- **Tierはネットワークデータではなくブロック自体に持たせる**: 「ターミナルごとのローカル設定」(6章)と同じ発想で、所属情報(`network.controller`等の座標)と個々の状態を分離している。
+- **壊さずにその場でTierを上げる**: コントローラを破壊すると`destroyNetwork`でネットワークごと解体される(2章)ため、アップグレード操作は`block.setPermutation()`でブロックステートだけを書き換える(破壊イベントは発生しない)。専用の消費アイテム(アップグレードキット)を対象ブロックに`onUseOn`で直接使う方式にした。レンチのモード切替とは別にした理由は、レンチが「何度でも使える設定ツール」という設計思想を持つのに対し、アップグレードは本来消費される性質の操作で噛み合わないため。
+- **実装上の注意**: `BlockPermutation.getState`/`withState`の型は`minecraftvanilladata.BlockStateSuperset`(バニラの既知ステートのみ)を対象にしたジェネリックで、`"wh:speed_tier"`のようなカスタムステート名は型に存在しない。読み取りは`getAllStates()`(型が緩く安全)を使い、書き込みは`withState`の引数を`as any`でキャストしている。このアドオンでカスタムブロックステートを使うのはこれが最初のため、この制約がここで初めて表面化した。
+
+**現在実装済みの軸はコントローラの「速度」のみ**(`controllerAxes.ts`の`CONTROLLER_SPEED_AXIS`)。引き出し/預け入れ/整理のスループット(旧`ORDER_THROUGHPUT_PER_CYCLE`等の固定定数)を、各処理モジュール(`orderProcessing.ts`/`depositProcessing.ts`/`organizeProcessing.ts`)がTier0〜4の5段階のテーブル(`getOrderThroughput(tier)`等)として持つように変更し、`processNetworkOrders`等が毎サイクル`getAxisTier(dimension, network.controller, CONTROLLER_SPEED_AXIS)`で実際のTierを読んで予算を決める。搬入出(引き出し`ORDER_THROUGHPUT_BY_TIER`/預け入れ`DEPOSIT_THROUGHPUT_BY_TIER`)は`[128, 192, 384, 1024, 4096]`で共通。整理(`ORGANIZE_THROUGHPUT_BY_TIER`)はネットワーク外部とやり取りしない内部処理という性質上、搬入出のちょうど4倍`[512, 768, 1536, 4096, 16384]`にしている。発行遅延・接続範囲・自動チェック間隔は今回は対象外(将来、同じ枠組みで別の軸として追加する想定)。
+
+**アップグレードキット**: Tierごとに別アイテムにした(バニラ道具の格上げ順に合わせ、銅→鉄→ダイヤ→ネザライトの4段階、`wh:speed_kit_copper`等、汎用コンポーネント`wh:upgrade_kit`を共有)。目標Tierに到達するための専用アイテムなので、ブロックが今何Tierかが一目で伝わる。キットは対象ブロックの**現在のTierがちょうどそのキットの`fromTier`と一致する場合にのみ**使え(飛び級はできない)、使用すると`setPermutation`でTierを1段上げ、手持ちのスタックを1個消費する(`upgradeKit.ts`)。判定・消費対象アイテムのテーブルは、各ブロックが持つ`UpgradeAxis`の配列から`kitItemIds`を辿って自動的に導出しているため、将来別の軸(あるいは別のブロック種)が増えても`upgradeKit.ts`自体は変更不要で、参照するaxes配列を合成するだけでよい。
+
+**循環import回避のための`controllerAxes.ts`分離**: `CONTROLLER_SPEED_AXIS`は当初`controllerBlock.ts`に直接定義していたが、`controllerBlock.ts`は`showControllerUi`のために`controllerUi.ts`に依存し、`controllerUi.ts`は表示のために`orderProcessing.ts`等の処理モジュールに依存している。そこへ処理モジュール側からスループット計算のために`controllerBlock.ts`のaxis定義をimportすると、`orderProcessing.ts → controllerBlock.ts → controllerUi.ts → orderProcessing.ts`という循環importになってしまう。そのため、軸の定義(`CONTROLLER_BLOCK_ID`/`CONTROLLER_SPEED_AXIS`/`CONTROLLER_AXES`)だけを、`upgrade.ts`にしか依存しない末端モジュール`controllerAxes.ts`に切り出した。
+
+**破壊時の挙動**: 対象ブロックを破壊すると、design.mdの既存方針(2章、破壊するとネットワークごと解体される)と一貫させ、Tierは0にリセットされる。ただし素材を無駄にしないため、`onPlayerBreak`で`event.brokenBlockPermutation`から破壊直前の軸ごとのTierを読み取り、それまでに消費したキットを軸ごとに返してから(`giveOrDropKits`、ネットワークの有無に関わらず必ず行う)、既存のネットワーク解体処理を行う。失われるのは「積み上げたTierという状態」だけで、素材そのものは失われない。
+
+**UI表示**: コントローラUIに専用の「アップグレード」タブを追加した(「状況」「整理」「アップグレード」「設定」の4タブ構成)。`CONTROLLER_AXES`をループするだけの実装なので、軸が増えても自動的に「Tier表示+取り出すボタン」の組が1つ増える。各軸につき、現在Tierを`{軸名} Tier {n} / {最大Tier}`の形式で表示するラベルと、「{軸名}取り出す」ボタンを1組表示する。Tierラベルは`ObservableString`にしてあり(DDUIの`CustomForm`は素の文字列を渡すと開いた時点の値のまま固定されてしまうため)、ボタンを押した瞬間に`setData()`で0に更新し、表示がその場で切り替わるようにしている。ボタンの`disabled`にも同様に`ObservableBoolean`(Tier0かどうか)を渡し、アップグレードが1段も入っていない間は非活性になる(取り出した直後もtrueに戻す)。ブロックの見た目(Tierごとのテクスチャ切り替え)は今回のスコープに含めていない(8章の既存方針「グラフィックの作り込みは後回し」を踏襲。プレイヤーへのフィードバックはUI上のTier表示で最低限確保している)。
+
+**アップグレードの取り出し**(`giveOrDropKits`、`upgrade.ts`): ブロックを破壊しなくても、UIのボタン1つで装着済みのキットを取り外せるようにした。破壊時のドロップと同じ関数を再利用し、`setAxisTier(block, axis, 0)`でTierを0に戻す(`setPermutation`によるその場書き換えなので、こちらもブロックの破壊やネットワークの解体は伴わない)。**返し方はブロックの隣への単純ドロップではなく、プレイヤーが分かる場合はまずインベントリへ直接渡し、入りきらなかった分だけをプレイヤーの足元にドロップする**(`Container.addItem`の戻り値=入りきらなかった分をそのまま`dimension.spawnItem`する)。UIのボタンは常にプレイヤーが分かるのでインベントリ優先になり、ブロック破壊時も`event.player`が分かればインベントリ優先、分からない場合(まれ)のみ従来通りブロック位置にドロップする。
+
+**将来「範囲」等の軸を追加する時にやること**(`upgrade.ts`自体は変更不要):
+1. 対象ブロックのJSONに新しいカスタムブロックステートを追加する(例: `"wh:range_tier": [0,1,2,3,4]`)。
+2. そのブロックの軸定義モジュール(例: `controllerAxes.ts`)に`UpgradeAxis`をもう1つ追加し、対応する`*_AXES`配列に加える。
+3. 新しいキットアイテム(BP item json + アイコン + lang)を用意する。
+4. その軸のTierを実際の効果(例: `NETWORK_RANGE_BLOCKS`)に反映する箇所を1箇所追加する。
 
 ### 預け入れ（格納）: 引き出しと対称な逆方向の処理
 

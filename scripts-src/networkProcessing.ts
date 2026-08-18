@@ -5,7 +5,7 @@ import { processNetworkOrders } from "./orderProcessing";
 import { processNetworkOrganize } from "./organizeProcessing";
 
 // このループ自体は「Minecraftのサーバーtick」20回につき1回だけ実行される(system.runIntervalの
-// 第2引数)。各処理内の「スループット」定数(ORDER_THROUGHPUT_PER_CYCLE等)は、あくまで
+// 第2引数)。各処理内の「スループット」テーブル(getOrderThroughput(tier)等)は、あくまで
 // 「このループが1回実行されるたびに消費できる予算」であり、Minecraftのサーバーtick単位の
 // レートそのものではない(1/20のこの間隔で処理をまとめて行っているだけ)。コントローラUIの
 // 「状況」タブでサーバーtick基準のレートに換算する際に参照できるようexportしている。

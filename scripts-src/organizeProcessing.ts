@@ -5,15 +5,21 @@ import { getOrganizeCancels, getOrganizeQueue, setOrganizeCancels, setOrganizeQu
 import { generateId, generateOrganizeId, NetworkData, OrganizeLine, OrganizeRequest } from "./state";
 import { getDrain } from "./storageSettings";
 import { insertIntoStorages } from "./storageScan";
+import { CONTROLLER_SPEED_AXIS } from "./controllerAxes";
+import { getAxisTier } from "./upgrade";
 
 // 倉庫の整理(引き出し/預け入れと同じくコントローラのタスク定期実行の仕組みに乗せる)。
-// MVP: 十分大きい固定値(=実質即時処理)。将来はコントローラのグレードに応じて可変にする。
 // docs/design.md 4章「スループット制」参照。コントローラUIの「状況」タブでは、ネットワーク
 // 外部とやり取りする引き出し/預け入れと対比して「内部」のスループットとして表示している
-// (ストレージ間の移動のみで、搬入出先のターミナルが無いため)。orderProcessing.tsの
-// ORDER_THROUGHPUT_PER_CYCLEと同じく、Minecraftのサーバーtick単位のレートではなく
-// 処理ループ1回あたりの予算。
-export const ORGANIZE_THROUGHPUT_PER_CYCLE = 100;
+// (ストレージ間の移動のみで、搬入出先のターミナルが無いため)。コントローラの速度アップグレード軸
+// (tier0〜4)ごとの予算。Minecraftのサーバーtick単位のレートではなく処理ループ1回あたりの予算。
+// 搬入出(orderProcessing.tsのORDER_THROUGHPUT_BY_TIER/depositProcessing.tsの
+// DEPOSIT_THROUGHPUT_BY_TIER、[128, 192, 384, 1024, 4096])のちょうど4倍にしてある。
+const ORGANIZE_THROUGHPUT_BY_TIER = [512, 768, 1536, 4096, 16384];
+// コントローラUIの「状況」タブ表示用にexportしている。
+export function getOrganizeThroughput(tier: number): number {
+  return ORGANIZE_THROUGHPUT_BY_TIER[tier] ?? ORGANIZE_THROUGHPUT_BY_TIER[ORGANIZE_THROUGHPUT_BY_TIER.length - 1];
+}
 
 // ネットワークにつき同時に1件まで。整理中に再度ボタンを押しても、既存のリクエストが
 // 終わるまでは何も起きない(整理はスナップショット時点の品目を対象にするだけの
@@ -72,7 +78,7 @@ export function processNetworkOrganize(network: NetworkData): void {
 
   const dimension = world.getDimension(network.dimensionId);
   const request = queue[0];
-  let budget = ORGANIZE_THROUGHPUT_PER_CYCLE;
+  let budget = getOrganizeThroughput(getAxisTier(dimension, network.controller, CONTROLLER_SPEED_AXIS));
 
   // Drain指定の有無は、このtickのこのネットワーク分だけ1回判定して使い回す
   // (depositProcessing.tsのdepositTargetsと同じ理由。品目ごとに問い合わせない)。

@@ -203,6 +203,25 @@ const terminalIconColorAt = flatTerminalIconColorAt([170, 235, 210], [40, 95, 80
 const autoTerminalIconColorAt = flatTerminalIconColorAt([255, 195, 120], [130, 80, 20]);
 const inventoryTerminalIconColorAt = flatTerminalIconColorAt([200, 165, 245], [80, 55, 120]);
 
+// アップグレードキットアイテム: 透過背景に単純な菱形(宝石風)アイコン。素材ごとの色味だけで
+// 見分ける(wrenchColorAtと同じく、作り込みは後回しのプレースホルダー)。
+function upgradeKitColorAt(tint) {
+  return (u, v) => {
+    const dx = Math.abs(u - 0.5);
+    const dy = Math.abs(v - 0.5);
+    if (dx + dy < 0.38) {
+      const n = (hashNoise(u, v) - 0.5) * 12;
+      return [clampByte(tint[0] + n), clampByte(tint[1] + n), clampByte(tint[2] + n), 255];
+    }
+    return [0, 0, 0, 0];
+  };
+}
+
+const speedKitCopperColorAt = upgradeKitColorAt([190, 110, 70]);
+const speedKitIronColorAt = upgradeKitColorAt([210, 210, 215]);
+const speedKitDiamondColorAt = upgradeKitColorAt([110, 220, 230]);
+const speedKitNetheriteColorAt = upgradeKitColorAt([70, 55, 60]);
+
 // レンチアイテム: 透過背景に単純な十字(スパナ風)アイコン
 function wrenchColorAt(u, v) {
   const dx = u - 0.5;
@@ -272,6 +291,10 @@ writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
 writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
+writePng("RP/textures/items/speed_kit_copper.png", 16, speedKitCopperColorAt);
+writePng("RP/textures/items/speed_kit_iron.png", 16, speedKitIronColorAt);
+writePng("RP/textures/items/speed_kit_diamond.png", 16, speedKitDiamondColorAt);
+writePng("RP/textures/items/speed_kit_netherite.png", 16, speedKitNetheriteColorAt);
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);
 writePng("BP/pack_icon.png", 128, packIconColorAt);
