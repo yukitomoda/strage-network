@@ -222,6 +222,24 @@ const speedKitIronColorAt = upgradeKitColorAt([210, 210, 215]);
 const speedKitDiamondColorAt = upgradeKitColorAt([110, 220, 230]);
 const speedKitNetheriteColorAt = upgradeKitColorAt([70, 55, 60]);
 
+// 「周期」軸のキット: 速度キットと同じ素材の色味だが、形をリング(時計の輪っか風)にして
+// 軸違いを一目で区別できるようにする。
+function upgradeKitRingColorAt(tint) {
+  return (u, v) => {
+    const dist = Math.hypot(u - 0.5, v - 0.5);
+    if (dist < 0.4 && dist > 0.16) {
+      const n = (hashNoise(u, v) - 0.5) * 12;
+      return [clampByte(tint[0] + n), clampByte(tint[1] + n), clampByte(tint[2] + n), 255];
+    }
+    return [0, 0, 0, 0];
+  };
+}
+
+const cycleKitCopperColorAt = upgradeKitRingColorAt([190, 110, 70]);
+const cycleKitIronColorAt = upgradeKitRingColorAt([210, 210, 215]);
+const cycleKitDiamondColorAt = upgradeKitRingColorAt([110, 220, 230]);
+const cycleKitNetheriteColorAt = upgradeKitRingColorAt([70, 55, 60]);
+
 // レンチアイテム: 透過背景に単純な十字(スパナ風)アイコン
 function wrenchColorAt(u, v) {
   const dx = u - 0.5;
@@ -295,6 +313,10 @@ writePng("RP/textures/items/speed_kit_copper.png", 16, speedKitCopperColorAt);
 writePng("RP/textures/items/speed_kit_iron.png", 16, speedKitIronColorAt);
 writePng("RP/textures/items/speed_kit_diamond.png", 16, speedKitDiamondColorAt);
 writePng("RP/textures/items/speed_kit_netherite.png", 16, speedKitNetheriteColorAt);
+writePng("RP/textures/items/cycle_kit_copper.png", 16, cycleKitCopperColorAt);
+writePng("RP/textures/items/cycle_kit_iron.png", 16, cycleKitIronColorAt);
+writePng("RP/textures/items/cycle_kit_diamond.png", 16, cycleKitDiamondColorAt);
+writePng("RP/textures/items/cycle_kit_netherite.png", 16, cycleKitNetheriteColorAt);
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);
 writePng("BP/pack_icon.png", 128, packIconColorAt);

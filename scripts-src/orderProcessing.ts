@@ -17,9 +17,8 @@ import { getAxisTier } from "./upgrade";
 
 // コントローラの速度アップグレード軸(tier0〜4)ごとの予算。docs/design.md 4章「スループット制」
 // 参照。「CYCLE」は「processNetworkOrdersが1回呼ばれるたびの予算」という意味で、Minecraftの
-// サーバーtick単位のレートではない(呼ばれる間隔はnetworkProcessing.tsの
-// NETWORK_PROCESSING_INTERVAL_TICKS=20tickに1回なので、サーバーtick基準のレートに換算する
-// 場合は20で割る)。
+// サーバーtick単位のレートではない(呼ばれる間隔はコントローラの「周期」アップグレード軸の
+// Tierに応じて可変。networkProcessing.tsのgetCycleIntervalTicks参照)。
 const ORDER_THROUGHPUT_BY_TIER = [128, 192, 384, 1024, 4096];
 // コントローラUIの「状況」タブ表示用にexportしている。
 export function getOrderThroughput(tier: number): number {

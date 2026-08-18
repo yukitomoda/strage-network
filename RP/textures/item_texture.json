@@ -25,6 +25,18 @@
     },
     "wh_speed_kit_netherite": {
       "textures": "textures/items/speed_kit_netherite"
+    },
+    "wh_cycle_kit_copper": {
+      "textures": "textures/items/cycle_kit_copper"
+    },
+    "wh_cycle_kit_iron": {
+      "textures": "textures/items/cycle_kit_iron"
+    },
+    "wh_cycle_kit_diamond": {
+      "textures": "textures/items/cycle_kit_diamond"
+    },
+    "wh_cycle_kit_netherite": {
+      "textures": "textures/items/cycle_kit_netherite"
     }
   }
 }

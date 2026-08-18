@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:cycle_kit_iron",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_cycle_kit_iron",
+      "minecraft:display_name": {
+        "value": "item.wh:cycle_kit_iron"
+      },
+      "minecraft:custom_components": [
+        "wh:upgrade_kit"
+      ]
+    }
+  }
+}

@@ -17,7 +17,18 @@ export const CONTROLLER_SPEED_AXIS: UpgradeAxis = {
   kitItemIds: ["wh:speed_kit_copper", "wh:speed_kit_iron", "wh:speed_kit_diamond", "wh:speed_kit_netherite"],
 };
 
+// コントローラの「周期」アップグレード軸(処理サイクル1回あたりのtick数。値が小さいほど
+// サイクルの間隔が短くなり=速くなる)。テーブル本体はnetworkProcessing.tsが持つ
+// (実際の処理ループを回しているのがそこのため)。
+export const CONTROLLER_CYCLE_AXIS: UpgradeAxis = {
+  id: "controller_cycle",
+  label: "周期",
+  blockTypeId: CONTROLLER_BLOCK_ID,
+  stateKey: "wh:cycle_tier",
+  kitItemIds: ["wh:cycle_kit_copper", "wh:cycle_kit_iron", "wh:cycle_kit_diamond", "wh:cycle_kit_netherite"],
+};
+
 // コントローラが持つ全アップグレード軸。upgradeKit.tsのアイテム対応表・controllerBlock.tsの
-// onPlayerBreakのドロップ処理はここを見て軸ごとに処理するので、軸を増やす時はこの配列に
-// 加えるだけでよい。
-export const CONTROLLER_AXES: UpgradeAxis[] = [CONTROLLER_SPEED_AXIS];
+// onPlayerBreakのドロップ処理・controllerUi.tsのアップグレードタブ表示はここを見て軸ごとに
+// 処理するので、軸を増やす時はこの配列に加えるだけでよい。
+export const CONTROLLER_AXES: UpgradeAxis[] = [CONTROLLER_SPEED_AXIS, CONTROLLER_CYCLE_AXIS];
