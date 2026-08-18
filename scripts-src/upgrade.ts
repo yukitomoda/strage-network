@@ -7,7 +7,7 @@ export type UpgradeAxis = {
   label: string; // UI/メッセージ表示用の日本語名("速度"等)
   blockTypeId: string; // このアップグレードが有効なブロックのtypeId
   stateKey: string; // このブロックが持つカスタムブロックステート名(例: "wh:speed_tier")
-  kitItemIds: string[]; // index i の要素 = Tier i -> i+1 に使うキットのアイテムtypeId
+  kitItemIds: string[]; // index i の要素 = Tier i+1 に直接設定するキットのアイテムtypeId(飛び級可、upgradeKit.ts参照)
 };
 
 export function getAxisMaxTier(axis: UpgradeAxis): number {
@@ -37,10 +37,13 @@ export function setAxisTier(block: Block, axis: UpgradeAxis, tier: number): void
   block.setPermutation(block.permutation.withState(axis.stateKey as any, tier as any));
 }
 
-// 破壊/排出時、そのブロックが積んでいたTier分のキットを返す(軸に依存しない共通処理)。
-// Tierという「積み上げた状態」自体は失われるが(design.md参照)、消費した素材は無駄にならない
-// ようにする。playerが分かる場合はまずインベントリへ直接渡し、入りきらなかった分(と、playerが
-// 分からない場合の全量)だけをlocationにその場でドロップする。
+// 破壊/排出時、そのブロックに装着されていたキットを返す(軸に依存しない共通処理)。
+// キットはどのTierのものでも直接1個だけ装着する方式(upgradeKit.ts参照)になったため、
+// 返すのも装着されていたTierに対応するキット1個だけでよい(以前は0〜Tierの累積で
+// 複数個返していたが、飛び級運用に合わせて廃止した)。Tierという「装着した状態」自体は
+// 失われるが(design.md参照)、消費した素材は無駄にならないようにする。playerが分かる場合は
+// まずインベントリへ直接渡し、入りきらなかった分(と、playerが分からない場合の全量)だけを
+// プレイヤーの足元(分からない場合はlocation=ブロック付近)にドロップする。
 export function giveOrDropKits(
   dimension: Dimension,
   location: Vector3,
@@ -48,13 +51,13 @@ export function giveOrDropKits(
   tier: number,
   player?: Player
 ): void {
+  if (tier <= 0) return;
+
   const inventory = player?.getComponent("inventory")?.container;
   const dropLocation = player?.location ?? location;
-  for (let t = 0; t < tier; t++) {
-    const stack = new ItemStack(axis.kitItemIds[t], 1);
-    const leftover = inventory?.addItem(stack);
-    if (!inventory || leftover) {
-      dimension.spawnItem(leftover ?? stack, dropLocation);
-    }
+  const stack = new ItemStack(axis.kitItemIds[tier - 1], 1);
+  const leftover = inventory?.addItem(stack);
+  if (!inventory || leftover) {
+    dimension.spawnItem(leftover ?? stack, dropLocation);
   }
 }
