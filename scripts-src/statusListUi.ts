@@ -181,7 +181,7 @@ export function setupOrderStatusSection(
   return setupCancellableList<Order>(
     form,
     tabVisible,
-    includeHeader ? "引き出し§7（タップでキャンセル）" : undefined,
+    includeHeader ? "引き出し" : undefined,
     fetchAll,
     (order) => order.requestId,
     (order) => {
@@ -209,7 +209,7 @@ export function setupDepositStatusSection(
   return setupCancellableList<DepositRequest>(
     form,
     tabVisible,
-    includeHeader ? "預け入れ§7（タップでキャンセル）" : undefined,
+    includeHeader ? "預け入れ" : undefined,
     fetchAll,
     (request) => request.id,
     (request) => {
@@ -240,7 +240,7 @@ export function setupOrganizeStatusSection(
   return setupCancellableList<OrganizeRequest>(
     form,
     tabVisible,
-    includeHeader ? "整理§7（タップでキャンセル）" : undefined,
+    includeHeader ? "整理" : undefined,
     fetchAll,
     (request) => request.id,
     (request) => {
