@@ -198,7 +198,7 @@ function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order)
 
   player.sendMessage(
     shortfall.length > 0
-      ? `§e${namePrefix}引き出し #${order.id} の受け取り準備ができました(一部品切れで届かなかった品があります)。`
+      ? `§e${namePrefix}引き出し #${order.id} の受け取り準備ができました(一部搬送できなかった品があります)。`
       : `§b${namePrefix}引き出し #${order.id} の受け取り準備ができました。`
   );
 }
