@@ -2,15 +2,15 @@
   "format_version": "1.21.0",
   "minecraft:item": {
     "description": {
-      "identifier": "wh:speed_kit_copper",
+      "identifier": "wh:cycle_kit_tier1",
       "menu_category": {
         "category": "equipment"
       }
     },
     "components": {
-      "minecraft:icon": "wh_speed_kit_copper",
+      "minecraft:icon": "wh_cycle_kit_tier1",
       "minecraft:display_name": {
-        "value": "item.wh:speed_kit_copper"
+        "value": "item.wh:cycle_kit_tier1"
       },
       "minecraft:custom_components": [
         "wh:upgrade_kit"

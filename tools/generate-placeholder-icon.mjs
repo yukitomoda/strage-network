@@ -203,8 +203,10 @@ const terminalIconColorAt = flatTerminalIconColorAt([170, 235, 210], [40, 95, 80
 const autoTerminalIconColorAt = flatTerminalIconColorAt([255, 195, 120], [130, 80, 20]);
 const inventoryTerminalIconColorAt = flatTerminalIconColorAt([200, 165, 245], [80, 55, 120]);
 
-// アップグレードキットアイテム: 透過背景に単純な菱形(宝石風)アイコン。素材ごとの色味だけで
-// 見分ける(wrenchColorAtと同じく、作り込みは後回しのプレースホルダー)。
+// アップグレードキットアイテム: 透過背景に単純な菱形(宝石風)アイコン。Tierごとの色味だけで
+// 見分ける(素材(銅/鉄/ダイヤ/ネザライト)には対応させず、Tier番号のみの汎用ネーミングにした。
+// 色自体は元々の素材イメージを踏襲しつつ、あくまでTierの進行を表す配色として流用している)。
+// wrenchColorAtと同じく、作り込みは後回しのプレースホルダー。
 function upgradeKitColorAt(tint) {
   return (u, v) => {
     const dx = Math.abs(u - 0.5);
@@ -217,12 +219,16 @@ function upgradeKitColorAt(tint) {
   };
 }
 
-const speedKitCopperColorAt = upgradeKitColorAt([190, 110, 70]);
-const speedKitIronColorAt = upgradeKitColorAt([210, 210, 215]);
-const speedKitDiamondColorAt = upgradeKitColorAt([110, 220, 230]);
-const speedKitNetheriteColorAt = upgradeKitColorAt([70, 55, 60]);
+const UPGRADE_TIER_TINTS = [
+  [190, 110, 70], // Tier1
+  [210, 210, 215], // Tier2
+  [110, 220, 230], // Tier3
+  [70, 55, 60], // Tier4
+];
 
-// 「周期」軸のキット: 速度キットと同じ素材の色味だが、形をリング(時計の輪っか風)にして
+const speedKitColorAtByTier = UPGRADE_TIER_TINTS.map((tint) => upgradeKitColorAt(tint));
+
+// 「周期」軸のキット: 速度キットと同じTierごとの色味だが、形をリング(時計の輪っか風)にして
 // 軸違いを一目で区別できるようにする。
 function upgradeKitRingColorAt(tint) {
   return (u, v) => {
@@ -235,10 +241,7 @@ function upgradeKitRingColorAt(tint) {
   };
 }
 
-const cycleKitCopperColorAt = upgradeKitRingColorAt([190, 110, 70]);
-const cycleKitIronColorAt = upgradeKitRingColorAt([210, 210, 215]);
-const cycleKitDiamondColorAt = upgradeKitRingColorAt([110, 220, 230]);
-const cycleKitNetheriteColorAt = upgradeKitRingColorAt([70, 55, 60]);
+const cycleKitColorAtByTier = UPGRADE_TIER_TINTS.map((tint) => upgradeKitRingColorAt(tint));
 
 // レンチアイテム: 透過背景に単純な十字(スパナ風)アイコン
 function wrenchColorAt(u, v) {
@@ -309,14 +312,12 @@ writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
 writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
-writePng("RP/textures/items/speed_kit_copper.png", 16, speedKitCopperColorAt);
-writePng("RP/textures/items/speed_kit_iron.png", 16, speedKitIronColorAt);
-writePng("RP/textures/items/speed_kit_diamond.png", 16, speedKitDiamondColorAt);
-writePng("RP/textures/items/speed_kit_netherite.png", 16, speedKitNetheriteColorAt);
-writePng("RP/textures/items/cycle_kit_copper.png", 16, cycleKitCopperColorAt);
-writePng("RP/textures/items/cycle_kit_iron.png", 16, cycleKitIronColorAt);
-writePng("RP/textures/items/cycle_kit_diamond.png", 16, cycleKitDiamondColorAt);
-writePng("RP/textures/items/cycle_kit_netherite.png", 16, cycleKitNetheriteColorAt);
+speedKitColorAtByTier.forEach((colorAt, i) => {
+  writePng(`RP/textures/items/speed_kit_tier${i + 1}.png`, 16, colorAt);
+});
+cycleKitColorAtByTier.forEach((colorAt, i) => {
+  writePng(`RP/textures/items/cycle_kit_tier${i + 1}.png`, 16, colorAt);
+});
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);
 writePng("BP/pack_icon.png", 128, packIconColorAt);

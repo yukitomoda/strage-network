@@ -14,7 +14,7 @@ export const CONTROLLER_SPEED_AXIS: UpgradeAxis = {
   label: "速度",
   blockTypeId: CONTROLLER_BLOCK_ID,
   stateKey: "wh:speed_tier",
-  kitItemIds: ["wh:speed_kit_copper", "wh:speed_kit_iron", "wh:speed_kit_diamond", "wh:speed_kit_netherite"],
+  kitItemIds: ["wh:speed_kit_tier1", "wh:speed_kit_tier2", "wh:speed_kit_tier3", "wh:speed_kit_tier4"],
 };
 
 // コントローラの「周期」アップグレード軸(処理サイクル1回あたりのtick数。値が小さいほど
@@ -25,7 +25,7 @@ export const CONTROLLER_CYCLE_AXIS: UpgradeAxis = {
   label: "周期",
   blockTypeId: CONTROLLER_BLOCK_ID,
   stateKey: "wh:cycle_tier",
-  kitItemIds: ["wh:cycle_kit_copper", "wh:cycle_kit_iron", "wh:cycle_kit_diamond", "wh:cycle_kit_netherite"],
+  kitItemIds: ["wh:cycle_kit_tier1", "wh:cycle_kit_tier2", "wh:cycle_kit_tier3", "wh:cycle_kit_tier4"],
 };
 
 // コントローラが持つ全アップグレード軸。upgradeKit.tsのアイテム対応表・controllerBlock.tsの

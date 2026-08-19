@@ -2,15 +2,15 @@
   "format_version": "1.21.0",
   "minecraft:item": {
     "description": {
-      "identifier": "wh:cycle_kit_diamond",
+      "identifier": "wh:cycle_kit_tier4",
       "menu_category": {
         "category": "equipment"
       }
     },
     "components": {
-      "minecraft:icon": "wh_cycle_kit_diamond",
+      "minecraft:icon": "wh_cycle_kit_tier4",
       "minecraft:display_name": {
-        "value": "item.wh:cycle_kit_diamond"
+        "value": "item.wh:cycle_kit_tier4"
       },
       "minecraft:custom_components": [
         "wh:upgrade_kit"
