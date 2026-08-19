@@ -243,13 +243,36 @@ function upgradeKitRingColorAt(tint) {
 
 const cycleKitColorAtByTier = UPGRADE_TIER_TINTS.map((tint) => upgradeKitRingColorAt(tint));
 
-// レンチアイテム: 透過背景に単純な十字(スパナ風)アイコン
+// レンチアイテム: 透過背景に、斜めの柄+片側に開口部のある輪(スパナの口)+反対側に丸い柄尻、
+// という実際のスパナのシルエットに近いアイコン。
 function wrenchColorAt(u, v) {
   const dx = u - 0.5;
   const dy = v - 0.5;
-  const inBar = Math.abs(dx + dy) < 0.09 || Math.abs(dx - dy) < 0.09;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (inBar && dist < 0.42) return [190, 190, 200, 255];
+  // 柄が左下から右上に伸びるよう45度回転させた座標系(rx=柄方向、ry=柄の幅方向)。
+  const rx = (dx + dy) * Math.SQRT1_2;
+  const ry = (dy - dx) * Math.SQRT1_2;
+
+  const bright = [200, 200, 210, 255];
+  const shade = [130, 130, 145, 255];
+
+  // 柄(シャフト)
+  const inShaft = Math.abs(ry) < 0.06 && rx > -0.28 && rx < 0.16;
+
+  // スパナの口(右上端): 輪の外側(柄と逆方向、rx正方向)だけ開口させたリング。
+  const headCx = 0.28;
+  const hx = rx - headCx;
+  const headDist = Math.hypot(hx, ry);
+  const headAngle = Math.atan2(ry, hx); // -PI..PI, 0=外向き
+  const inGap = Math.abs(headAngle) < 0.55 && headDist > 0.09;
+  const inHead = headDist > 0.08 && headDist < 0.2 && !inGap;
+
+  // 柄尻(左下端): 単純な丸いキャップ
+  const capCx = -0.28;
+  const cx = rx - capCx;
+  const inCap = Math.hypot(cx, ry) < 0.1;
+
+  if (inHead) return headDist > 0.15 ? shade : bright;
+  if (inCap || inShaft) return bright;
   return [0, 0, 0, 0];
 }
 
