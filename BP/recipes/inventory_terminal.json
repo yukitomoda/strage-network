@@ -1,0 +1,18 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:inventory_terminal"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:ender_eye" },
+      "B": { "item": "minecraft:repeater" },
+      "C": { "item": "wh:terminal" },
+      "D": { "item": "minecraft:clock" }
+    },
+    "pattern": [" A ", "BCB", " D "],
+    "result": { "item": "wh:inventory_terminal" },
+    "unlock": [{ "item": "wh:terminal" }]
+  }
+}

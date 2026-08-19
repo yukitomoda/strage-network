@@ -1,0 +1,18 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:speed_kit_tier4"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:gold_ingot" },
+      "B": { "item": "minecraft:enchanted_golden_apple" },
+      "C": { "item": "wh:speed_kit_tier3" },
+      "D": { "item": "minecraft:nether_star" }
+    },
+    "pattern": ["ABA", "ACA", "ADA"],
+    "result": { "item": "wh:speed_kit_tier4" },
+    "unlock": [{ "item": "wh:speed_kit_tier3" }]
+  }
+}

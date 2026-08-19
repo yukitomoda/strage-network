@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:speed_kit_tier2"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:diamond" },
+      "B": { "item": "minecraft:piston" },
+      "C": { "item": "wh:speed_kit_tier1" }
+    },
+    "pattern": ["A A", "BCB", "A A"],
+    "result": { "item": "wh:speed_kit_tier2" },
+    "unlock": [{ "item": "wh:speed_kit_tier1" }]
+  }
+}

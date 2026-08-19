@@ -1,0 +1,18 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:terminal"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:iron_ingot" },
+      "B": { "item": "minecraft:glass" },
+      "C": { "item": "minecraft:comparator" },
+      "D": { "item": "minecraft:hopper" }
+    },
+    "pattern": ["ABA", "BCB", "ADA"],
+    "result": { "item": "wh:terminal" },
+    "unlock": [{ "item": "minecraft:comparator" }]
+  }
+}

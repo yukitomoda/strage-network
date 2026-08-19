@@ -1,0 +1,16 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:wrench"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:copper_ingot" },
+      "B": { "item": "minecraft:stick" }
+    },
+    "pattern": ["AA", " B"],
+    "result": { "item": "wh:wrench" },
+    "unlock": [{ "item": "minecraft:copper_ingot" }]
+  }
+}

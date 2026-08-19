@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:speed_kit_tier1"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:coal_block" },
+      "B": { "item": "minecraft:gold_ingot" },
+      "C": { "item": "minecraft:stick" }
+    },
+    "pattern": ["A A", "BCB", "A A"],
+    "result": { "item": "wh:speed_kit_tier1" },
+    "unlock": [{ "item": "minecraft:stick" }]
+  }
+}
