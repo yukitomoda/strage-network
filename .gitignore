@@ -1,4 +1,5 @@
 node_modules/
+dist/
 BP/scripts/main.js
 BP/pack_icon.png
 RP/textures/items/energy_fruit.png

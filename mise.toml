@@ -25,3 +25,13 @@ run = "node tools/install.mjs --copy"
 [tasks.uninstall]
 description = "配置した BP/RP を development_*_packs から取り除く"
 run = "node tools/install.mjs --remove"
+
+[tasks.release]
+description = "prod用の.mcaddonパッケージ(dist/StorageNetwork.mcaddon)を生成する"
+depends = ["build"]
+run = "node tools/build-release.mjs"
+
+[tasks."install:prod"]
+description = "生成した.mcaddonをMinecraftで開いてインストールする(devパックと共存可能)"
+depends = ["release"]
+run = "node tools/install-prod.mjs"
