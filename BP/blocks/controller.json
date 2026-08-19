@@ -1,5 +1,5 @@
 {
-  "format_version": "1.21.40",
+  "format_version": "1.21.100",
   "minecraft:block": {
     "description": {
       "identifier": "wh:controller",
@@ -22,6 +22,9 @@
         "seconds_to_destroy": 3
       },
       "minecraft:map_color": "#ffaa3c",
+      "minecraft:movable": {
+        "movement_type": "immovable"
+      },
       "minecraft:custom_components": [
         "wh:controller"
       ]

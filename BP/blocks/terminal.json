@@ -1,5 +1,5 @@
 {
-  "format_version": "1.21.40",
+  "format_version": "1.21.100",
   "minecraft:block": {
     "description": {
       "identifier": "wh:terminal",
@@ -26,6 +26,9 @@
       },
       "minecraft:map_color": "#78c8aa",
       "minecraft:collision_box": false,
+      "minecraft:movable": {
+        "movement_type": "immovable"
+      },
       "minecraft:custom_components": [
         "wh:terminal"
       ],
