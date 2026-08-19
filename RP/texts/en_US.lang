@@ -12,5 +12,26 @@ item.wh:cycle_kit_tier1=T1 Cycle Reduction Kit
 item.wh:cycle_kit_tier2=T2 Cycle Reduction Kit
 item.wh:cycle_kit_tier3=T3 Cycle Reduction Kit
 item.wh:cycle_kit_tier4=T4 Cycle Reduction Kit
-pack.name=Warehouse Addon - Resource Pack
+pack.name=Storage Network - Resource Pack
 pack.description=A storage network addon for personal use
+
+wh.addon_name=Storage Network
+
+item.wh:wrench.desc.1=§7Shift+right-click to use
+item.wh:wrench.desc.2=§7Using it on a controller starts network editing mode.
+item.wh:wrench.desc.3=§7Using it in the air switches the edit mode.
+
+item.wh:speed_kit.desc.summary=§7§oLets the controller transfer more items at once
+item.wh:speed_kit.desc.withdraw=§7Withdraw: §r
+item.wh:speed_kit.desc.deposit=§7Deposit: §r
+item.wh:speed_kit.desc.internal=§7Internal: §r
+
+item.wh:cycle_kit.desc.summary=§7§oLets the controller run its processing cycle more often.
+item.wh:cycle_kit.desc.interval=§7Cycle interval: §r
+
+item.wh:controller.desc.1=§7§oA controller for building a warehouse network.
+
+item.wh:terminal.desc.1=§7§oA terminal for moving items between a storage and the network.
+item.wh:auto_terminal.desc.1=§7§oA terminal that periodically exchanges items with the network so the storage's contents approach a target.
+item.wh:inventory_terminal.desc.1=§7§oA terminal that periodically exchanges items with storage so the network's stock approaches a target.
+item.wh:terminal_family.desc.usage=§7Place it on a storage and connect it to a network to use it.

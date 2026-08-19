@@ -1,7 +1,7 @@
 {
   "format_version": 2,
   "header": {
-    "name": "倉庫アドオン - Behavior Pack",
+    "name": "Storage Network - Behavior Pack",
     "description": "個人利用向けの倉庫(ストレージネットワーク)アドオン (ビヘイビアパック)",
     "uuid": "290ed4cf-9a04-4ec2-9b8c-9ef37c36653c",
     "version": [0, 3, 0],

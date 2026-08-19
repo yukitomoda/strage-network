@@ -1,6 +1,6 @@
 tile.wh:controller.name=倉庫コントローラ
 tile.wh:terminal.name=倉庫ターミナル
-tile.wh:auto_terminal.name=自動端末
+tile.wh:auto_terminal.name=自動ターミナル
 tile.wh:inventory_terminal.name=在庫管理ターミナル
 item.wh:wrench=倉庫レンチ
 item.wh:test_filler=[テスト用] ランダム充填ツール
@@ -12,5 +12,26 @@ item.wh:cycle_kit_tier1=T1 周期短縮キット
 item.wh:cycle_kit_tier2=T2 周期短縮キット
 item.wh:cycle_kit_tier3=T3 周期短縮キット
 item.wh:cycle_kit_tier4=T4 周期短縮キット
-pack.name=倉庫アドオン - リソースパック
+pack.name=Storage Network - リソースパック
 pack.description=個人利用向けの倉庫(ストレージネットワーク)アドオン
+
+wh.addon_name=Storage Network
+
+item.wh:wrench.desc.1=§7Shift+右クリックで使用
+item.wh:wrench.desc.2=§7コントローラに使用すると、ネットワーク編集を開始します。
+item.wh:wrench.desc.3=§7空中で使用すると、編集モードを切り替えます。
+
+item.wh:speed_kit.desc.summary=§7§oコントローラが一度により多くのアイテムを転送できるようになります
+item.wh:speed_kit.desc.withdraw=§7引き出し: §r
+item.wh:speed_kit.desc.deposit=§7預け入れ: §r
+item.wh:speed_kit.desc.internal=§7内部転送: §r
+
+item.wh:cycle_kit.desc.summary=§7§oコントローラがより頻繁に処理を実行できるようになります。
+item.wh:cycle_kit.desc.interval=§7処理周期: §r
+
+item.wh:controller.desc.1=§7§o倉庫ネットワークを構築するためのコントローラ。
+
+item.wh:terminal.desc.1=§7§oストレージとネットワークのアイテムを出し入れする端末。
+item.wh:auto_terminal.desc.1=§7§oストレージの内容が目標に近づくように、定期的にネットワークとアイテムを出し入れする端末。
+item.wh:inventory_terminal.desc.1=§7§oネットワークの在庫が目標に近づくように、定期的にストレージとアイテムを出し入れする端末。
+item.wh:terminal_family.desc.usage=§7ストレージに設置し、ネットワークに接続して使用します。

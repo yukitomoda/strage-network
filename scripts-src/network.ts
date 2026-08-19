@@ -150,7 +150,7 @@ function containersShareStorage(a: Container, b: Container): boolean {
 
   // 空きスロットを探す必要はない。どのスロットも「元の中身を退避 -> 目印を書き込んで
   // 確認 -> 必ず元に戻す」という手順にすれば、満杯のコンテナでも判定できる。
-  // 倉庫アドオンでは大量にアイテムを詰め込んだコンテナを接続することが普通なので、
+  // Storage Networkでは大量にアイテムを詰め込んだコンテナを接続することが普通なので、
   // 空きスロット前提の判定は実用上ほぼ機能しない。
   const probeSlot = 0;
   const original = a.getItem(probeSlot);

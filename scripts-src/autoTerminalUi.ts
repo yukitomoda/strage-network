@@ -250,7 +250,7 @@ function setupSettingsTab(
   form.label("このターミナルの設定です。", { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.textField("名前", name, {
-    description: "自動端末の識別用です。",
+    description: "自動ターミナルの識別用です。",
     visible: tabVisible,
   });
   form.toggle("自動預け入れ", autoDeposit, {
@@ -283,7 +283,7 @@ export function showAutoTerminalUi(player: Player, block: Block): void {
     isSettingsTab.setData(index === 2);
   });
 
-  const form = new CustomForm(player, terminalName ? `自動端末: ${terminalName}` : "自動端末");
+  const form = new CustomForm(player, terminalName ? `自動ターミナル: ${terminalName}` : "自動ターミナル");
   form.dropdown("", tabSelection, [
     { label: "自動引き出し", value: 0 },
     { label: "状況", value: 1 },
