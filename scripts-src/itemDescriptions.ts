@@ -1,4 +1,4 @@
-import { PlayerInventoryType, RawMessage, world } from "@minecraft/server";
+import { RawMessage, world } from "@minecraft/server";
 import { CONTROLLER_CYCLE_AXIS, CONTROLLER_SPEED_AXIS } from "./controllerAxes";
 import { getDepositThroughput } from "./depositProcessing";
 import { getCycleIntervalTicks } from "./networkProcessing";
@@ -114,7 +114,7 @@ const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
 export function startItemDescriptionWatcher(): void {
   world.afterEvents.playerInventoryItemChange.subscribe(
     (event) => {
-      const { itemStack, slot, player, inventoryType } = event;
+      const { itemStack, slot, player } = event;
       if (!itemStack) return;
       if (itemStack.getLore().length > 0) return; // 付与済み(このsetItem自体の再発火も含む)
 
@@ -125,13 +125,14 @@ export function startItemDescriptionWatcher(): void {
       const inventory = player.getComponent("inventory")?.container;
       if (!inventory) return;
 
-      // Hotbar/Inventoryはこのイベントではそれぞれ独立した添字を返すが、実体は同じ
-      // コンテナの前半9枠(Hotbar)・それ以降(Inventory)なので、書き戻し先はオフセットして揃える。
-      const containerSlot = inventoryType === PlayerInventoryType.Inventory ? slot + 9 : slot;
-
+      // Hotbar/Inventoryどちらの場合もslotはこのプレイヤーのコンテナ内での絶対スロット番号
+      // (Hotbarは0-8, Inventoryは9-35)をそのまま指しているため、オフセット計算は不要。
+      // 以前は+9のオフセットを加えていたが、これがInventory側で二重補正になり、書き戻し先が
+      // 1行(9スロット)下にずれて「元のアイテムはそのまま・1マス下に説明文付きのコピーが
+      // 新規生成される」という複製バグの原因になっていた。
       const updated = itemStack.clone();
       updated.setLore(lore);
-      inventory.setItem(containerSlot, updated);
+      inventory.setItem(slot, updated);
     },
     { includeItems: Object.keys(ITEM_DESCRIPTIONS), ignoreQuantityChange: true }
   );
