@@ -154,7 +154,7 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
       const paired = findAdjacentConnectedStorage(dimension, network, block.location);
       if (paired) {
         player.sendMessage(
-          "§c隣接するチェストと中身を共有しているため、既にネットワークに含まれています(二重登録を防止しました)。"
+          "§c隣接するチェストと中身を共有しているため、既にネットワークに含まれています。"
         );
         return;
       }
@@ -199,7 +199,7 @@ function handleDrainModeUse(player: Player, dimension: Dimension, block: Block, 
 
   player.sendMessage(
     newValue
-      ? "§eこのストレージをDrain指定にしました(新規の預け入れ先から除外し、倉庫の整理でできるだけ空にします)。"
+      ? "§eこのストレージをDrain対象に指定しました。"
       : "§bこのストレージのDrain指定を解除しました。"
   );
 }

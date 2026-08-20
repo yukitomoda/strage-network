@@ -165,7 +165,7 @@ function notifyOrganizeComplete(
 
   player.sendMessage(
     leftover
-      ? `§e倉庫の整理 #${request.displayId} が完了しました(退避先の空き不足で一部の品目は整理できませんでした)。`
+      ? `§e倉庫の整理 #${request.displayId} が完了しました(容量不足のため一部は整理できませんでした)。`
       : `§b倉庫の整理 #${request.displayId} が完了しました。`
   );
 }
