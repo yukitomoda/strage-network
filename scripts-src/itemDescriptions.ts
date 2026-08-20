@@ -51,6 +51,7 @@ function terminalFamilyLore(summaryKey: string): RawMessage[] {
 const TERMINAL_LORE = terminalFamilyLore("item.wh:terminal.desc.1");
 const AUTO_TERMINAL_LORE = terminalFamilyLore("item.wh:auto_terminal.desc.1");
 const INVENTORY_TERMINAL_LORE = terminalFamilyLore("item.wh:inventory_terminal.desc.1");
+const PRECISION_TERMINAL_LORE = terminalFamilyLore("item.wh:precision_terminal.desc.1");
 
 // 速度強化キット: T1〜T4で文章自体は共通(item.wh:speed_kit.desc.*)で、スループット・Tier
 // 番号・最大Tierだけがそのキットのtierに応じて変わる。数値を説明文にベタ書きしないのは、
@@ -115,6 +116,7 @@ const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
   "wh:terminal": TERMINAL_LORE,
   "wh:auto_terminal": AUTO_TERMINAL_LORE,
   "wh:inventory_terminal": INVENTORY_TERMINAL_LORE,
+  "wh:precision_terminal": PRECISION_TERMINAL_LORE,
   "wh:speed_kit_tier1": () => buildSpeedKitLore(1),
   "wh:speed_kit_tier2": () => buildSpeedKitLore(2),
   "wh:speed_kit_tier3": () => buildSpeedKitLore(3),

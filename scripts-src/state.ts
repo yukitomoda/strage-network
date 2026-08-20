@@ -19,6 +19,9 @@ export type OrderLine = {
   requested: number;
   delivered: number;
   exhausted: boolean;
+  // 精密ターミナル(precisionTerminalCheck.ts)からの依頼のみ指定される。搬入先コンテナの
+  // 「どこでもいい」ではなく指定スロットへ直接搬入する(storageScan.tsのextractFromStoragesIntoSlot参照)。
+  slotIndex?: number;
 };
 
 export type Order = {
@@ -54,6 +57,8 @@ export type DepositLine = {
   requested: number;
   delivered: number;
   exhausted: boolean;
+  // OrderLine.slotIndexと同じ考え方。精密ターミナルの「リスト外スロットの回収」からのみ指定される。
+  slotIndex?: number;
 };
 
 export type DepositRequest = {
@@ -91,6 +96,20 @@ export type StockTargetLine = {
   itemTypeId: string;
   itemName?: string;
   targetAmount: number;
+};
+
+// 精密ターミナルの「スロットごとのルール」。アタッチ先コンテナの指定スロットを対象に、
+// targetAmount分のitemTypeIdを維持しつつ(不足分はネットワークから補充)、collectがtrueなら
+// 目標外の品目・目標を超えた余剰分をネットワークへ回収する(precisionTerminalCheck.ts参照)。
+// targetAmountが0(itemTypeId未設定=「目標なし」)の場合、collect: trueと組み合わせると
+// そのスロットの中身が事実上すべて回収される(=旧来の「出力スロット」相当)。
+// 1台につき最大16件、同じslotIndexのエントリは1つまで。
+export type PrecisionSlotLine = {
+  slotIndex: number;
+  itemTypeId?: string; // targetAmount > 0の時だけ意味を持つ
+  itemName?: string;
+  targetAmount: number; // 0 = 目標なし
+  collect: boolean; // 目標外/余剰分をネットワークへ回収するか
 };
 
 // 倉庫の整理(コントローラのタスク定期実行の仕組みに乗せる)。引き出し/預け入れと違い搬入出先が
@@ -148,6 +167,10 @@ export function generateAutoTerminalName(): string {
 
 export function generateInventoryTerminalName(): string {
   return `INV-${generateShortCode()}`;
+}
+
+export function generatePrecisionTerminalName(): string {
+  return `PRC-${generateShortCode()}`;
 }
 
 export function locEquals(a: Vector3, b: Vector3): boolean {

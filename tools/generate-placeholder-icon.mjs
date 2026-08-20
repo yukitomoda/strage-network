@@ -173,6 +173,9 @@ const autoTerminalColorAt = terminalFamilyColorAt([255, 195, 120], [130, 80, 20]
 // 在庫管理ターミナル: 同じ構図だが、スクリーンが紫系で他の2種と見分けが付く
 const inventoryTerminalColorAt = terminalFamilyColorAt([200, 165, 245], [80, 55, 120]);
 
+// 精密ターミナル: 同じ構図だが、スクリーンが赤系で他の3種と見分けが付く(「精密/照準」のイメージ)
+const precisionTerminalColorAt = terminalFamilyColorAt([250, 140, 140], [110, 30, 30]);
+
 // インベントリ等で使う、正面から見た単純な2Dアイコン(ブロックの3Dモデル用テクスチャとは
 // 別ファイル)。手に持った時やクリエイティブインベントリの見た目はこちらが使われるように
 // 各ブロックのBP側で`minecraft:icon`として登録する。3Dモデル側のBox UVテクスチャ
@@ -202,6 +205,7 @@ function flatTerminalIconColorAt(screenTop, screenBottom) {
 const terminalIconColorAt = flatTerminalIconColorAt([170, 235, 210], [40, 95, 80]);
 const autoTerminalIconColorAt = flatTerminalIconColorAt([255, 195, 120], [130, 80, 20]);
 const inventoryTerminalIconColorAt = flatTerminalIconColorAt([200, 165, 245], [80, 55, 120]);
+const precisionTerminalIconColorAt = flatTerminalIconColorAt([250, 140, 140], [110, 30, 30]);
 
 // アップグレードキットアイテム: 透過背景に単純な菱形(宝石風)アイコン。Tierごとの色味だけで
 // 見分ける(素材(銅/鉄/ダイヤ/ネザライト)には対応させず、Tier番号のみの汎用ネーミングにした。
@@ -348,9 +352,11 @@ writePng("RP/textures/blocks/controller.png", 32, controllerColorAt);
 writePng("RP/textures/blocks/terminal.png", 32, terminalColorAt);
 writePng("RP/textures/blocks/auto_terminal.png", 32, autoTerminalColorAt);
 writePng("RP/textures/blocks/inventory_terminal.png", 32, inventoryTerminalColorAt);
+writePng("RP/textures/blocks/precision_terminal.png", 32, precisionTerminalColorAt);
 writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
 writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);
+writePng("RP/textures/blocks/precision_terminal_icon.png", 16, precisionTerminalIconColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
 speedKitColorAtByTier.forEach((colorAt, i) => {
   writePng(`RP/textures/items/speed_kit_tier${i + 1}.png`, 16, colorAt);

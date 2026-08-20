@@ -22,8 +22,16 @@ const ROW_COUNT = 8;
 export const STATUS_REFRESH_INTERVAL_TICKS = 100;
 
 // 引き出し(OrderLine)・預け入れ(DepositLine)は品目ごとの進捗を全く同じ形で持つため、
-// ツールチップ生成もこの共通の形に対して1つだけ書けばよい。
-type ProgressLine = { itemTypeId: string; itemName?: string; requested: number; delivered: number; exhausted: boolean };
+// ツールチップ生成もこの共通の形に対して1つだけ書けばよい。slotIndexは精密ターミナルからの
+// ラインのみ持つ(state.ts参照)。
+type ProgressLine = {
+  itemTypeId: string;
+  itemName?: string;
+  requested: number;
+  delivered: number;
+  exhausted: boolean;
+  slotIndex?: number;
+};
 
 // 品目ごとの「配送済み/要求数」を色分けして並べたツールチップ(§書式コードが効くのは
 // ボタンのtooltipだけ、詳細はdocs/design.md 7章参照)。
@@ -33,6 +41,7 @@ function progressTooltip(lines: ProgressLine[], cancelHint: string): UIRawMessag
     if (i > 0) parts.push({ text: "\n" });
     const color = line.exhausted ? "§c" : line.delivered >= line.requested ? "§a" : "§e";
     parts.push({ text: `${color}${line.delivered}/${line.requested} ` });
+    if (line.slotIndex !== undefined) parts.push({ text: `スロット${line.slotIndex}: ` });
     parts.push(
       line.itemName ? { text: line.itemName } : { translate: new ItemStack(line.itemTypeId, 1).localizationKey }
     );

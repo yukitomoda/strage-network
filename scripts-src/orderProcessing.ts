@@ -8,7 +8,7 @@ import {
   setOrderCancels,
   setOrders,
 } from "./network";
-import { extractFromStorages } from "./storageScan";
+import { extractFromStorages, extractFromStoragesIntoSlot } from "./storageScan";
 import { generateId, generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
 import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
@@ -62,6 +62,18 @@ export function hasPendingOrderFor(
           !line.exhausted &&
           line.delivered < line.requested
       )
+  );
+}
+
+// hasPendingOrderForは品目ベースの判定だが、精密ターミナルの「リスト外スロットの回収」は
+// 送信のたびに品目が変わりうるため、(terminal, slotIndex)ベースで判定する必要がある
+// (precisionTerminalCheck.ts参照)。
+export function hasPendingSlotOrderFor(networkId: string, terminalLoc: Vector3, slotIndex: number): boolean {
+  const pendingOrders = [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
+  return pendingOrders.some(
+    (order) =>
+      locEquals(order.terminal, terminalLoc) &&
+      order.lines.some((line) => line.slotIndex === slotIndex && !line.exhausted && line.delivered < line.requested)
   );
 }
 
@@ -142,13 +154,25 @@ export function processNetworkOrders(network: NetworkData): void {
     }
 
     const attempt = Math.min(line.requested - line.delivered, budget);
-    const extracted = extractFromStorages(
-      dimension,
-      network,
-      { typeId: line.itemTypeId, name: line.itemName },
-      attempt,
-      destContainer
-    );
+    // 精密ターミナルからの依頼(line.slotIndexあり)は指定スロットのみへ搬入する
+    // (storageScan.tsのextractFromStoragesIntoSlot参照)。それ以外は従来通りコンテナのどこでもいい。
+    const extracted =
+      line.slotIndex !== undefined
+        ? extractFromStoragesIntoSlot(
+            dimension,
+            network,
+            { typeId: line.itemTypeId, name: line.itemName },
+            attempt,
+            destContainer,
+            line.slotIndex
+          )
+        : extractFromStorages(
+            dimension,
+            network,
+            { typeId: line.itemTypeId, name: line.itemName },
+            attempt,
+            destContainer
+          );
     line.delivered += extracted;
     budget -= extracted;
 

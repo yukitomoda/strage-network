@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.100",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:precision_terminal",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_precision_terminal_icon",
+      "minecraft:block_placer": {
+        "block": "wh:precision_terminal"
+      },
+      "minecraft:display_name": {
+        "value": "tile.wh:precision_terminal.name"
+      }
+    }
+  }
+}

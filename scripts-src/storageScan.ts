@@ -125,8 +125,9 @@ export function buildStorageIndex(dimension: Dimension, network: NetworkData): S
 // 索引がある場合、そのキーを既に持っているストレージを優先し、残りを末尾に回す。
 // index は network.storages 全体から作られている一方、storages(候補先)は Drain指定などで
 // 絞り込まれている場合があるため、priority 側も storages に実在するものだけに絞ってから使う
-// (絞り込み対象外の場所を誤って先頭に混入させないため)。
-function orderStoragesByPriority(storages: Vector3[], key: DisplayKey, index?: StorageIndex): Vector3[] {
+// (絞り込み対象外の場所を誤って先頭に混入させないため)。insertSlotIntoStorages(精密ターミナル用)
+// からも使うためexportしている。
+export function orderStoragesByPriority(storages: Vector3[], key: DisplayKey, index?: StorageIndex): Vector3[] {
   if (!index) return storages;
   const priority = index.get(serializeKey(key));
   if (!priority || priority.length === 0) return storages;
@@ -191,4 +192,102 @@ export function insertIntoStorages(
   }
 
   return amount - remaining;
+}
+
+// 精密ターミナル(orderProcessing.tsのline.slotIndex経由)専用。extractFromStoragesと同じ順で
+// ネットワークのストレージを走査するが、格納先はdestContainerの指定スロットのみ
+// (「コンテナのどこでもいい」という前提のextractFromStoragesとは異なる)。既存の中身がkeyと
+// 矛盾する場合は何もしない(精密ターミナルの希望リスト補充では、呼び出し元のprecisionTerminalCheck.ts
+// が既に矛盾チェックをしているはずだが、念のためここでも防御する)。搬入量はアイテムの
+// maxAmount(最大スタック数)と既存の中身から計算した空き分でも制限する。
+export function extractFromStoragesIntoSlot(
+  dimension: Dimension,
+  network: NetworkData,
+  key: DisplayKey,
+  amount: number,
+  destContainer: Container,
+  slotIndex: number
+): number {
+  const existing = destContainer.getItem(slotIndex);
+  if (existing && !displayKeyEquals(displayKeyOf(existing), key)) return 0;
+
+  const maxStack = existing?.maxAmount ?? new ItemStack(key.typeId, 1).maxAmount;
+  const room = maxStack - (existing?.amount ?? 0);
+  let remaining = Math.min(amount, room);
+  if (remaining <= 0) return 0;
+  const requested = remaining;
+
+  for (const loc of network.storages) {
+    if (remaining <= 0) break;
+    const container = dimension.getBlock(loc)?.getComponent("inventory")?.container;
+    if (!container) continue;
+
+    for (let i = 0; i < container.size && remaining > 0; i++) {
+      const item = container.getItem(i);
+      if (!item || !displayKeyEquals(displayKeyOf(item), key)) continue;
+
+      const take = Math.min(remaining, item.amount);
+      const current = destContainer.getItem(slotIndex);
+      if (current) {
+        const merged = current.clone();
+        merged.amount += take;
+        destContainer.setItem(slotIndex, merged);
+      } else {
+        const placed = item.clone();
+        placed.amount = take;
+        destContainer.setItem(slotIndex, placed);
+      }
+
+      if (take >= item.amount) {
+        container.setItem(i, undefined);
+      } else {
+        const remainder = item.clone();
+        remainder.amount = item.amount - take;
+        container.setItem(i, remainder);
+      }
+      remaining -= take;
+    }
+  }
+
+  return requested - remaining;
+}
+
+// 精密ターミナル専用。insertIntoStoragesと対称だが、取り出し元はsourceContainerの指定スロットのみ
+// (コンテナ全体の走査が不要なため、単一スロット分の処理だけで済む)。
+export function insertSlotIntoStorages(
+  dimension: Dimension,
+  network: NetworkData,
+  key: DisplayKey,
+  amount: number,
+  sourceContainer: Container,
+  slotIndex: number,
+  storageIndex?: StorageIndex,
+  destinationStorages: Vector3[] = network.storages
+): number {
+  const item = sourceContainer.getItem(slotIndex);
+  if (!item || !displayKeyEquals(displayKeyOf(item), key)) return 0;
+
+  const take = Math.min(amount, item.amount);
+  let leftover: ItemStack | undefined = item.clone();
+  leftover.amount = take;
+
+  const orderedStorages = orderStoragesByPriority(destinationStorages, key, storageIndex);
+  for (const loc of orderedStorages) {
+    if (!leftover) break;
+    const destContainer = dimension.getBlock(loc)?.getComponent("inventory")?.container;
+    if (!destContainer) continue;
+    leftover = destContainer.addItem(leftover);
+  }
+
+  const inserted = take - (leftover?.amount ?? 0);
+  if (inserted <= 0) return 0;
+
+  if (inserted >= item.amount) {
+    sourceContainer.setItem(slotIndex, undefined);
+  } else {
+    const remainder = item.clone();
+    remainder.amount = item.amount - inserted;
+    sourceContainer.setItem(slotIndex, remainder);
+  }
+  return inserted;
 }

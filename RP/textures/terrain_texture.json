@@ -13,6 +13,9 @@
     },
     "wh:inventory_terminal": {
       "textures": "textures/blocks/inventory_terminal"
+    },
+    "wh:precision_terminal": {
+      "textures": "textures/blocks/precision_terminal"
     }
   }
 }

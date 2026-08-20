@@ -8,7 +8,7 @@ import {
   setDepositIssuing,
   setDeposits,
 } from "./network";
-import { buildStorageIndex, insertIntoStorages } from "./storageScan";
+import { buildStorageIndex, insertIntoStorages, insertSlotIntoStorages } from "./storageScan";
 import {
   DepositLine,
   DepositRequest,
@@ -80,6 +80,20 @@ export function hasPendingDepositFor(
           !line.exhausted &&
           line.delivered < line.requested
       )
+  );
+}
+
+// orderProcessing.tsのhasPendingSlotOrderForと同じ発想。精密ターミナルの「リスト外スロットの
+// 回収」は送信のたびに品目が変わりうるため、(terminal, slotIndex)ベースで判定する。
+export function hasPendingSlotDepositFor(networkId: string, terminalLoc: Vector3, slotIndex: number): boolean {
+  const pendingDeposits = [
+    ...getDepositIssuing(networkId).map((entry) => entry.request),
+    ...getDeposits(networkId),
+  ];
+  return pendingDeposits.some(
+    (request) =>
+      locEquals(request.terminal, terminalLoc) &&
+      request.lines.some((line) => line.slotIndex === slotIndex && !line.exhausted && line.delivered < line.requested)
   );
 }
 
@@ -161,15 +175,29 @@ export function processNetworkDeposits(network: NetworkData): void {
     }
 
     const attempt = Math.min(line.requested - line.delivered, budget);
-    const inserted = insertIntoStorages(
-      dimension,
-      network,
-      { typeId: line.itemTypeId, name: line.itemName },
-      attempt,
-      sourceContainer,
-      storageIndex,
-      depositTargets
-    );
+    // 精密ターミナルからの依頼(line.slotIndexあり)は指定スロットのみから取り出す
+    // (storageScan.tsのinsertSlotIntoStorages参照)。それ以外は従来通りコンテナ全体を対象にする。
+    const inserted =
+      line.slotIndex !== undefined
+        ? insertSlotIntoStorages(
+            dimension,
+            network,
+            { typeId: line.itemTypeId, name: line.itemName },
+            attempt,
+            sourceContainer,
+            line.slotIndex,
+            storageIndex,
+            depositTargets
+          )
+        : insertIntoStorages(
+            dimension,
+            network,
+            { typeId: line.itemTypeId, name: line.itemName },
+            attempt,
+            sourceContainer,
+            storageIndex,
+            depositTargets
+          );
     line.delivered += inserted;
     budget -= inserted;
 

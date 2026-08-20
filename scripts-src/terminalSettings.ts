@@ -1,5 +1,5 @@
 import { Dimension, Entity, Vector3 } from "@minecraft/server";
-import { locEquals, StockTargetLine, WishlistLine } from "./state";
+import { locEquals, PrecisionSlotLine, StockTargetLine, WishlistLine } from "./state";
 
 // ターミナルごとのローカル設定を保持する非表示エンティティ。ブロックには動的プロパティを
 // 持たせられないため(docs/design.md 2章参照)。network.terminals(所属情報)とは意図的に
@@ -15,6 +15,7 @@ const WISHLIST_PROPERTY = "wh:wishlist";
 const STOCK_TARGETS_PROPERTY = "wh:stock_targets";
 const AUTO_DEPOSIT_PROPERTY = "wh:auto_deposit";
 const INVENTORY_AUTO_DEPOSIT_PROPERTY = "wh:inventory_auto_deposit";
+const PRECISION_SLOTS_PROPERTY = "wh:precision_slots";
 const OWNER_LOCATION_PROPERTY = "wh:owner_loc";
 
 function centerOf(loc: Vector3): Vector3 {
@@ -137,4 +138,19 @@ export function getInventoryAutoDeposit(dimension: Dimension, terminalLoc: Vecto
 
 export function setInventoryAutoDeposit(dimension: Dimension, terminalLoc: Vector3, value: boolean): void {
   ensureEntity(dimension, terminalLoc).setDynamicProperty(INVENTORY_AUTO_DEPOSIT_PROPERTY, value);
+}
+
+// 精密ターミナルの「スロットごとのルール」(入力/出力)。他のターミナルは使わない。
+export function getPrecisionSlots(dimension: Dimension, terminalLoc: Vector3): PrecisionSlotLine[] {
+  const raw = findSettingsEntity(dimension, terminalLoc)?.getDynamicProperty(PRECISION_SLOTS_PROPERTY);
+  if (typeof raw !== "string") return [];
+  try {
+    return JSON.parse(raw) as PrecisionSlotLine[];
+  } catch {
+    return [];
+  }
+}
+
+export function setPrecisionSlots(dimension: Dimension, terminalLoc: Vector3, slots: PrecisionSlotLine[]): void {
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(PRECISION_SLOTS_PROPERTY, JSON.stringify(slots));
 }
