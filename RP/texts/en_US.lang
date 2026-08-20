@@ -12,6 +12,10 @@ item.wh:cycle_kit_tier1=T1 Cycle Reduction Kit
 item.wh:cycle_kit_tier2=T2 Cycle Reduction Kit
 item.wh:cycle_kit_tier3=T3 Cycle Reduction Kit
 item.wh:cycle_kit_tier4=T4 Cycle Reduction Kit
+item.wh:range_kit_tier1=T1 Range Expansion Kit
+item.wh:range_kit_tier2=T2 Range Expansion Kit
+item.wh:range_kit_tier3=T3 Range Expansion Kit
+item.wh:range_kit_tier4=T4 Range Expansion Kit
 pack.name=Storage Network - Resource Pack
 pack.description=A storage network addon for personal use
 
@@ -28,6 +32,9 @@ item.wh:speed_kit.desc.internal=§7Internal: §r
 
 item.wh:cycle_kit.desc.summary=§7§oLets the controller run its processing cycle more often.
 item.wh:cycle_kit.desc.interval=§7Cycle interval: §r
+
+item.wh:range_kit.desc.summary=§7§oLets the controller connect storages/terminals from farther away.
+item.wh:range_kit.desc.range=§7Range: §r
 
 item.wh:controller.desc.1=§7§oA controller for building a warehouse network.
 

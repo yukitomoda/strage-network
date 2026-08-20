@@ -1,5 +1,5 @@
 {
-  "format_version": "1.21.0",
+  "format_version": "1.21.100",
   "minecraft:item": {
     "description": {
       "identifier": "wh:speed_kit_tier3",
@@ -12,9 +12,7 @@
       "minecraft:display_name": {
         "value": "item.wh:speed_kit_tier3"
       },
-      "minecraft:custom_components": [
-        "wh:upgrade_kit"
-      ]
+      "wh:upgrade_kit": {}
     }
   }
 }

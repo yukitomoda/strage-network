@@ -8,7 +8,8 @@
       },
       "states": {
         "wh:speed_tier": [0, 1, 2, 3, 4],
-        "wh:cycle_tier": [0, 1, 2, 3, 4]
+        "wh:cycle_tier": [0, 1, 2, 3, 4],
+        "wh:range_tier": [0, 1, 2, 3, 4]
       }
     },
     "components": {
@@ -25,9 +26,7 @@
       "minecraft:movable": {
         "movement_type": "immovable"
       },
-      "minecraft:custom_components": [
-        "wh:controller"
-      ]
+      "wh:controller": {}
     }
   }
 }

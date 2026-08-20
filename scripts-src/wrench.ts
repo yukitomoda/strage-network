@@ -7,18 +7,19 @@ import {
   getAllNetworks,
   getNetwork,
   isWithinNetworkRange,
-  NETWORK_RANGE_BLOCKS,
   resolveStorageMembership,
   toggleStorage,
   toggleTerminal,
 } from "./network";
-import { locEquals } from "./state";
+import { locEquals, NetworkData } from "./state";
 import { getDrain, removeSettingsEntity as removeStorageSettingsEntity, setDrain } from "./storageSettings";
 import { isTerminalLikeBlock } from "./terminalBlock";
 import { getToolMode } from "./toolMode";
 import { showToolModeUi } from "./toolModeUi";
 import { endEditingSession, getEditingNetworkId, isAnyoneEditingNetwork, setEditingNetworkId } from "./editingSession";
 import { syncRangeIndicator } from "./rangeIndicator";
+import { CONTROLLER_RANGE_AXIS, getRangeForTier } from "./controllerAxes";
+import { getAxisTier } from "./upgrade";
 
 const HIGHLIGHT_INTERVAL = 10;
 
@@ -99,6 +100,11 @@ function handleControllerUse(player: Player, dimension: Dimension, block: Block)
   player.sendMessage(`§bネットワーク編集を開始しました。${modeHint}再度コントローラをShiftキーを押しながら右クリックすると終了します。`);
 }
 
+// 範囲軸(controllerAxes.ts)の現在Tierから、このネットワークの接続可能範囲を引く。
+function getEffectiveRange(dimension: Dimension, network: NetworkData): number {
+  return getRangeForTier(getAxisTier(dimension, network.controller, CONTROLLER_RANGE_AXIS));
+}
+
 // 従来のネットワーク構築モード(ストレージ/ターミナルを右クリックして接続/切断)。倉庫レンチの
 // デフォルトモード。コントローラでの編集開始/終了はhandleControllerUseに一本化されている。
 function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, editingNetworkId: string): void {
@@ -108,9 +114,9 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     if (!alreadyInThisNetwork) {
       // 新規接続(切断は範囲外でも常に許可する。既存メンバーが後から範囲外になった場合に
       // 切断すらできなくなる事故を避けるため)。
-      if (network && !isWithinNetworkRange(network, block.location)) {
+      if (network && !isWithinNetworkRange(network, block.location, getEffectiveRange(dimension, network))) {
         player.sendMessage(
-          `§cコントローラから各方向に${NETWORK_RANGE_BLOCKS}マスを超えているため接続できません。`
+          `§cコントローラから各方向に${getEffectiveRange(dimension, network)}マスを超えているため接続できません。`
         );
         return;
       }
@@ -138,9 +144,9 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     const alreadyConnected = network?.storages.some((s) => locEquals(s, block.location));
     if (network && !alreadyConnected) {
       // 新規接続(切断は範囲外でも常に許可する。ターミナル側と同じ理由)。
-      if (!isWithinNetworkRange(network, block.location)) {
+      if (!isWithinNetworkRange(network, block.location, getEffectiveRange(dimension, network))) {
         player.sendMessage(
-          `§cコントローラから各方向に${NETWORK_RANGE_BLOCKS}マスを超えているため接続できません。`
+          `§cコントローラから各方向に${getEffectiveRange(dimension, network)}マスを超えているため接続できません。`
         );
         return;
       }

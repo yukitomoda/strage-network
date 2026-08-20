@@ -1,0 +1,18 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:range_kit_tier4"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:glass" },
+      "B": { "item": "minecraft:chorus_fruit" },
+      "C": { "item": "wh:range_kit_tier3" },
+      "D": { "item": "minecraft:heavy_core" }
+    },
+    "pattern": ["ABA", "ACA", "ADA"],
+    "result": { "item": "wh:range_kit_tier4" },
+    "unlock": [{ "item": "wh:range_kit_tier3" }]
+  }
+}

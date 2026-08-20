@@ -215,22 +215,37 @@ export function resolveStorageMembership(
   return undefined;
 }
 
-// ネットワークの接続範囲(コントローラを中心とした立方体の半径、ブロック数)。MVP: 固定値。
-// 将来はコントローラのグレードに応じて可変にする想定(4章「スループット制」と同じ考え方。
-// docs/design.md参照)。この値はrangeIndicator.tsのジオメトリ(range_wall/range_ceiling)の
-// サイズにも直接焼き込まれているため、変更する場合はそちらも合わせて調整する必要がある。
-export const NETWORK_RANGE_BLOCKS = 8;
-
-// 立方体(各軸の距離が全てNETWORK_RANGE_BLOCKS以内)で判定する。当初は球(ユークリッド距離)
-// だったが、Minecraft本来の距離判定(ワールドボーダー等)は立方体状のものが多く感覚に合う、
-// 判定がシンプルになる、可視化(rangeIndicator.ts)も高さごとに断面の大きさが変わらず済む、
+// ネットワークの接続範囲(コントローラを中心とした立方体の半径、ブロック数)。コントローラの
+// 「範囲」アップグレード軸のTierに応じて可変(controllerAxes.tsのgetRangeForTier参照)。
+// network.ts自体はアップグレード軸の仕組みを知らないため、範囲の値は呼び出し側が
+// 都度getRangeForTierで引いてから渡す。
+//
+// 立方体(各軸の距離が全てrange以内)で判定する。当初は球(ユークリッド距離)だったが、
+// Minecraft本来の距離判定(ワールドボーダー等)は立方体状のものが多く感覚に合う、判定が
+// シンプルになる、可視化(rangeIndicator.ts)も高さごとに断面の大きさが変わらず済む、
 // という理由から立方体に変更した。
-export function isWithinNetworkRange(network: NetworkData, loc: Vector3): boolean {
+export function isWithinNetworkRange(network: NetworkData, loc: Vector3, range: number): boolean {
   return (
-    Math.abs(network.controller.x - loc.x) <= NETWORK_RANGE_BLOCKS &&
-    Math.abs(network.controller.y - loc.y) <= NETWORK_RANGE_BLOCKS &&
-    Math.abs(network.controller.z - loc.z) <= NETWORK_RANGE_BLOCKS
+    Math.abs(network.controller.x - loc.x) <= range &&
+    Math.abs(network.controller.y - loc.y) <= range &&
+    Math.abs(network.controller.z - loc.z) <= range
   );
+}
+
+// 範囲軸のTierダウン時、新しい範囲の外に出たメンバーを自動的に切断する
+// (controllerAxes.tsのpruneRangeAxisMembersから呼ばれる。詳細はそちらのコメント参照)。
+export function pruneOutOfRangeMembers(
+  networkId: string,
+  range: number
+): { removedStorages: Vector3[]; removedTerminals: Vector3[] } {
+  const network = getNetwork(networkId);
+  if (!network) return { removedStorages: [], removedTerminals: [] };
+
+  const removedStorages = network.storages.filter((s) => !isWithinNetworkRange(network, s, range));
+  const removedTerminals = network.terminals.filter((t) => !isWithinNetworkRange(network, t, range));
+  for (const s of removedStorages) removeStorage(networkId, s);
+  for (const t of removedTerminals) removeTerminal(networkId, t);
+  return { removedStorages, removedTerminals };
 }
 
 export function toggleStorage(networkId: string, loc: Vector3): "connected" | "disconnected" {

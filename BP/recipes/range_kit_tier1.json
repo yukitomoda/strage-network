@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:range_kit_tier1"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:iron_ingot" },
+      "B": { "item": "minecraft:glass" },
+      "C": { "item": "minecraft:stick" }
+    },
+    "pattern": ["A A", "BCB", "A A"],
+    "result": { "item": "wh:range_kit_tier1" },
+    "unlock": [{ "item": "minecraft:stick" }]
+  }
+}

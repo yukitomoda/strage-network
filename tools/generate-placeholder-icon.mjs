@@ -243,6 +243,23 @@ function upgradeKitRingColorAt(tint) {
 
 const cycleKitColorAtByTier = UPGRADE_TIER_TINTS.map((tint) => upgradeKitRingColorAt(tint));
 
+// 「範囲」軸のキット: 速度(菱形)/周期(リング)と見分けが付くよう、四角い枠(額縁)の形にする。
+// 「囲む範囲」を連想させる形として選んだ。
+function upgradeKitSquareColorAt(tint) {
+  return (u, v) => {
+    const dx = Math.abs(u - 0.5);
+    const dy = Math.abs(v - 0.5);
+    const d = Math.max(dx, dy);
+    if (d < 0.4 && d > 0.16) {
+      const n = (hashNoise(u, v) - 0.5) * 12;
+      return [clampByte(tint[0] + n), clampByte(tint[1] + n), clampByte(tint[2] + n), 255];
+    }
+    return [0, 0, 0, 0];
+  };
+}
+
+const rangeKitColorAtByTier = UPGRADE_TIER_TINTS.map((tint) => upgradeKitSquareColorAt(tint));
+
 // レンチアイテム: 透過背景に、斜めの柄+片側に開口部のある輪(スパナの口)+反対側に丸い柄尻、
 // という実際のスパナのシルエットに近いアイコン。
 function wrenchColorAt(u, v) {
@@ -340,6 +357,9 @@ speedKitColorAtByTier.forEach((colorAt, i) => {
 });
 cycleKitColorAtByTier.forEach((colorAt, i) => {
   writePng(`RP/textures/items/cycle_kit_tier${i + 1}.png`, 16, colorAt);
+});
+rangeKitColorAtByTier.forEach((colorAt, i) => {
+  writePng(`RP/textures/items/range_kit_tier${i + 1}.png`, 16, colorAt);
 });
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);

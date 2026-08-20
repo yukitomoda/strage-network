@@ -29,6 +29,20 @@
           "deals_damage": "no"
         }
       }
+    },
+    "component_groups": {
+      "wh:range_tier0": { "minecraft:scale": { "value": 0.4118 } },
+      "wh:range_tier1": { "minecraft:scale": { "value": 0.5294 } },
+      "wh:range_tier2": { "minecraft:scale": { "value": 0.7647 } },
+      "wh:range_tier3": { "minecraft:scale": { "value": 1.1176 } },
+      "wh:range_tier4": { "minecraft:scale": { "value": 1.9412 } }
+    },
+    "events": {
+      "wh:set_range_tier0": { "add": { "component_groups": ["wh:range_tier0"] } },
+      "wh:set_range_tier1": { "add": { "component_groups": ["wh:range_tier1"] } },
+      "wh:set_range_tier2": { "add": { "component_groups": ["wh:range_tier2"] } },
+      "wh:set_range_tier3": { "add": { "component_groups": ["wh:range_tier3"] } },
+      "wh:set_range_tier4": { "add": { "component_groups": ["wh:range_tier4"] } }
     }
   }
 }

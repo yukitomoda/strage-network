@@ -45,6 +45,7 @@ export const upgradeKitItemComponent: ItemCustomComponent = {
     }
 
     setAxisTier(block, target.axis, target.targetTier);
+    target.axis.onTierChanged?.(block.dimension, block, player);
     consumeOneFromMainHand(player);
     player.sendMessage(
       currentTier !== 0

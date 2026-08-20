@@ -1,5 +1,5 @@
 import { RawMessage, world } from "@minecraft/server";
-import { CONTROLLER_CYCLE_AXIS, CONTROLLER_SPEED_AXIS } from "./controllerAxes";
+import { CONTROLLER_CYCLE_AXIS, CONTROLLER_RANGE_AXIS, CONTROLLER_SPEED_AXIS, getRangeForTier } from "./controllerAxes";
 import { getDepositThroughput } from "./depositProcessing";
 import { getCycleIntervalTicks } from "./networkProcessing";
 import { getOrderThroughput } from "./orderProcessing";
@@ -92,6 +92,20 @@ function buildCycleKitLore(tier: number): RawMessage[] {
   ];
 }
 
+// 範囲強化キット: 速度/周期強化キットと同じ発想で、接続可能範囲(マス数)・Tier番号・最大Tierを
+// controllerAxes.ts/upgrade.tsから毎回取得する。
+function buildRangeKitLore(tier: number): RawMessage[] {
+  const maxTier = getAxisMaxTier(CONTROLLER_RANGE_AXIS);
+  return [
+    { translate: "item.wh:range_kit.desc.summary" },
+    BLANK_LINE,
+    { rawtext: [{ translate: "item.wh:range_kit.desc.range" }, { text: `±${getRangeForTier(tier)}` }] },
+    BLANK_LINE,
+    { text: `§7§oTier §r§o${tier} §7§o/ ${maxTier}` },
+    ADDON_SIGNATURE_LINE,
+  ];
+}
+
 // Bedrockにはアイテム"型"に静的な説明文を持たせる仕組みが無い(minecraft:display_nameは
 // 名前のみ)ため、対応表はここでitemId -> Loreの行配列(または動的に組み立てる関数)として持つ。
 // 1要素=1行。
@@ -109,6 +123,10 @@ const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
   "wh:cycle_kit_tier2": () => buildCycleKitLore(2),
   "wh:cycle_kit_tier3": () => buildCycleKitLore(3),
   "wh:cycle_kit_tier4": () => buildCycleKitLore(4),
+  "wh:range_kit_tier1": () => buildRangeKitLore(1),
+  "wh:range_kit_tier2": () => buildRangeKitLore(2),
+  "wh:range_kit_tier3": () => buildRangeKitLore(3),
+  "wh:range_kit_tier4": () => buildRangeKitLore(4),
 };
 
 export function startItemDescriptionWatcher(): void {

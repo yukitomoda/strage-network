@@ -8,6 +8,10 @@ export type UpgradeAxis = {
   blockTypeId: string; // このアップグレードが有効なブロックのtypeId
   stateKey: string; // このブロックが持つカスタムブロックステート名(例: "wh:speed_tier")
   kitItemIds: string[]; // index i の要素 = Tier i+1 に直接設定するキットのアイテムtypeId(飛び級可、upgradeKit.ts参照)
+  // Tier変更(setAxisTier)直後に呼ばれる、軸固有の追加処理(任意)。範囲軸のように
+  // 「Tierダウンで範囲外になったメンバーを自動切断する」といった副作用が必要な軸だけが
+  // 指定する。呼び出し元はupgradeKit.tsのキット使用時とcontrollerUi.tsの取り出しボタン。
+  onTierChanged?: (dimension: Dimension, block: Block, player?: Player) => void;
 };
 
 export function getAxisMaxTier(axis: UpgradeAxis): number {

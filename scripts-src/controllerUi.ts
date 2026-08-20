@@ -1,6 +1,6 @@
 import { Block, Player, system } from "@minecraft/server";
 import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } from "@minecraft/server-ui";
-import { CONTROLLER_AXES, CONTROLLER_CYCLE_AXIS, CONTROLLER_SPEED_AXIS } from "./controllerAxes";
+import { CONTROLLER_AXES, CONTROLLER_CYCLE_AXIS, CONTROLLER_RANGE_AXIS, CONTROLLER_SPEED_AXIS, getRangeForTier } from "./controllerAxes";
 import { getNotifyOnOrganizeComplete, setNotifyOnOrganizeComplete } from "./controllerSettings";
 import { getDepositThroughput, listActiveDeposits } from "./depositProcessing";
 import { findNetworkByController } from "./network";
@@ -152,6 +152,12 @@ export function showControllerUi(player: Player, block: Block): void {
       updateDetailLabels = (tier) => {
         cycleLabel.setData(`周期： §7${cycleIntervalLabel(getCycleIntervalTicks(tier))}`);
       };
+    } else if (axis === CONTROLLER_RANGE_AXIS) {
+      const rangeLabel = new ObservableString(`範囲： §7±${getRangeForTier(initialTier)}マス`);
+      form.label(rangeLabel, { visible: isUpgradeTab });
+      updateDetailLabels = (tier) => {
+        rangeLabel.setData(`範囲： §7±${getRangeForTier(tier)}マス`);
+      };
     }
 
     form.button(
@@ -161,6 +167,7 @@ export function showControllerUi(player: Player, block: Block): void {
         if (currentTier === 0) return; // 非活性化されているため通常は到達しない
         giveOrDropKits(dimension, block.location, axis, currentTier, player);
         setAxisTier(block, axis, 0);
+        axis.onTierChanged?.(dimension, block, player);
         tierLabel.setData(formatAxisTierLabel(axis, 0));
         updateDetailLabels(0);
         isEmpty.setData(true);

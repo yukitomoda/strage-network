@@ -1,7 +1,8 @@
-import { BlockCustomComponent } from "@minecraft/server";
+import { BlockCustomComponent, world } from "@minecraft/server";
 import { CONTROLLER_AXES, CONTROLLER_BLOCK_ID } from "./controllerAxes";
 import { removeSettingsEntity } from "./controllerSettings";
 import { showControllerUi } from "./controllerUi";
+import { endEditingSession, getEditingNetworkId } from "./editingSession";
 import { createNetwork, destroyNetwork, findNetworkByController } from "./network";
 import { getAxisTierFromPermutation, giveOrDropKits } from "./upgrade";
 
@@ -25,6 +26,16 @@ export const controllerBlockComponent: BlockCustomComponent = {
 
     const network = findNetworkByController(dimension.id, block.location);
     if (!network) return;
+
+    // 解体前に、このネットワークを編集中のプレイヤーがいれば編集セッションを終了させる
+    // (endEditingSessionが範囲表示インジケータの後片付けも行う)。解体後だとgetAllNetworks()
+    // から消えてしまい、定期ループ(wrench.tsのreconcileAllRangeIndicators)ではこのネットワークを
+    // 見つけられなくなるため、インジケータが永久に残ってしまう(実機で発見・修正)。編集中の
+    // プレイヤー自身が壊した場合も、他プレイヤーが編集中に誰かが壊した場合も同じ経路でカバーする。
+    for (const p of world.getPlayers()) {
+      if (getEditingNetworkId(p) === network.id) endEditingSession(p);
+    }
+
     destroyNetwork(network.id);
     removeSettingsEntity(dimension, block.location);
     player?.sendMessage("§e倉庫ネットワークを解体しました。");

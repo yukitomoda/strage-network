@@ -29,9 +29,6 @@
       "minecraft:movable": {
         "movement_type": "immovable"
       },
-      "minecraft:custom_components": [
-        "wh:inventory_terminal"
-      ],
       "minecraft:transformation": {
         "rotation": [
           0,
@@ -55,7 +52,8 @@
           14,
           2
         ]
-      }
+      },
+      "wh:inventory_terminal": {}
     },
     "permutations": [
       {
