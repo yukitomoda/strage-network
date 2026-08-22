@@ -303,7 +303,7 @@ export function showInventoryTerminalUi(player: Player, block: Block): void {
     isSettingsTab.setData(index === 2);
   });
 
-  const form = new CustomForm(player, terminalName ? `在庫管理端末: ${terminalName}` : "在庫管理端末");
+  const form = new CustomForm(player, terminalName ? `在庫管理: ${terminalName}` : "在庫管理");
   form.dropdown("", tabSelection, [
     { label: "在庫管理", value: 0 },
     { label: "状況", value: 1 },

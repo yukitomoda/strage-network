@@ -100,22 +100,22 @@ export function showObserverUi(player: Player, block: Block): void {
     persist();
   });
 
-  const form = new CustomForm(player, "ネットワークオブザーバー");
-  form.label("在庫モード: 1品目の在庫量に応じて信号強度が変わります。", { visible: isStockMode });
-  form.label("比較モード: 2品目のどちらが多いかで信号強度が変わります。", { visible: showItem2 });
+  const form = new CustomForm(player, "オブザーバー");
   form.toggle(modeLabel, isStockMode, {});
-  form.textField("最大値(在庫モード)", maxAmountText, { visible: isStockMode });
+  form.label("在庫モード: 最大値に対する在庫量で信号強度が変化します。", { visible: isStockMode });
+  form.label("比較モード: 2つの品目を比較して信号強度が変わります。", { visible: showItem2 });
+  form.textField("最大値", maxAmountText, { visible: isStockMode });
   form.divider({});
   form.label("品目1", {});
   form.label(item1Label, {});
-  form.label("品目2(比較モードのみ)", { visible: showItem2 });
+  form.label("品目2", { visible: showItem2 });
   form.label(item2Label, { visible: showItem2 });
   form.dropdown("設定先", targetSlot, [
     { label: "品目1", value: 0 },
     { label: "品目2", value: 1 },
   ], { visible: showTargetDropdown });
   form.divider({});
-  form.label("検索結果(タップで設定)", {});
+  form.label("検索結果", {});
   form.textField("検索", searchText, {});
   form.label(pageLabel, { visible: showPageLabel });
 

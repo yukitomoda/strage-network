@@ -307,7 +307,7 @@ export function showPrecisionTerminalUi(player: Player, block: Block): void {
     isSettingsTab.setData(index === 2);
   });
 
-  const form = new CustomForm(player, terminalName ? `精密ターミナル: ${terminalName}` : "精密ターミナル");
+  const form = new CustomForm(player, terminalName ? `精密: ${terminalName}` : "精密");
   form.dropdown("", tabSelection, [
     { label: "スロット設定", value: 0 },
     { label: "状況", value: 1 },

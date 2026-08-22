@@ -313,7 +313,7 @@ export function showOrderUi(player: Player, block: Block): void {
     isSettingsTab.setData(index === 3);
   });
 
-  const form = new CustomForm(player, terminalName ? `倉庫端末: ${terminalName}` : "倉庫端末");
+  const form = new CustomForm(player, terminalName ? `倉庫: ${terminalName}` : "倉庫");
   form.dropdown("", tabSelection, [
     { label: "引き出し", value: 0 },
     { label: "預け入れ", value: 1 },

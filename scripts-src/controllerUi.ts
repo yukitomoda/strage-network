@@ -51,7 +51,7 @@ export function showControllerUi(player: Player, block: Block): void {
     isSettingsTab.setData(index === 3);
   });
 
-  const form = new CustomForm(player, "倉庫コントローラ");
+  const form = new CustomForm(player, "倉庫");
   form.dropdown("", tabSelection, [
     { label: "状況", value: 0 },
     { label: "整理", value: 1 },

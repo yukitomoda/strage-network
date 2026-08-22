@@ -283,7 +283,7 @@ export function showAutoTerminalUi(player: Player, block: Block): void {
     isSettingsTab.setData(index === 2);
   });
 
-  const form = new CustomForm(player, terminalName ? `自動ターミナル: ${terminalName}` : "自動ターミナル");
+  const form = new CustomForm(player, terminalName ? `自動: ${terminalName}` : "自動");
   form.dropdown("", tabSelection, [
     { label: "自動引き出し", value: 0 },
     { label: "状況", value: 1 },
