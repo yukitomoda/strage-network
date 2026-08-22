@@ -43,6 +43,10 @@ function setupStockTargetTab(
   const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // ON: 増やす / OFF: 減らす
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
+  // ONの間、検索結果のタップは増減ではなく目標在庫数を0に設定する(在庫が無くなるまで
+  // 引き出し続ける「空にする」指定)。増やす/減らすの操作と同時に意味を持たせると混乱するため、
+  // ONの間は「増やす」トグルを無効化する。
+  const emptyMode = new ObservableBoolean(false, { clientWritable: true });
 
   const searchLabels: ObservableUIRawMessage[] = [];
   const searchVisible: ObservableBoolean[] = [];
@@ -121,8 +125,11 @@ function setupStockTargetTab(
     { visible: tabVisible }
   );
   form.textField("検索", searchText, { visible: tabVisible });
-  form.slider("維持したい在庫数", targetAmount, 1, 64, { step: 1, visible: tabVisible });
-  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible });
+  form.toggle("空に設定", emptyMode, {
+    visible: tabVisible,
+  });
+  form.slider("維持したい在庫数", targetAmount, 1, 64, { step: 1, visible: tabVisible, disabled: emptyMode });
+  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: emptyMode });
   form.divider({ visible: tabVisible });
   form.label("検索結果", { visible: tabVisible });
 
@@ -160,10 +167,23 @@ function setupStockTargetTab(
       () => {
         const entry = filtered[i];
         if (!entry) return;
-        const amount = Math.max(1, Math.floor(targetAmount.getData()));
         const existingIndex = targets.findIndex(
           (l) => l.itemTypeId === entry.key.typeId && (l.itemName ?? "") === (entry.key.name ?? "")
         );
+
+        if (emptyMode.getData()) {
+          if (existingIndex !== -1) {
+            targets[existingIndex].targetAmount = 0;
+          } else {
+            targets.push({ itemTypeId: entry.key.typeId, itemName: entry.key.name, targetAmount: 0 });
+          }
+          setStockTargets(dimension, terminalLoc, targets);
+          label.setData(searchRowMessage(entry));
+          refreshCurrent();
+          return;
+        }
+
+        const amount = Math.max(1, Math.floor(targetAmount.getData()));
 
         if (!increaseMode.getData()) {
           if (existingIndex === -1) return; // リストに無い品目は減らせない
