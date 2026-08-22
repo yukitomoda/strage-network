@@ -6,7 +6,7 @@
     },
     "tags": ["crafting_table"],
     "key": {
-      "A": { "item": "minecraft:sculk_sensor" },
+      "A": { "item": "minecraft:tnt" },
       "B": { "item": "wh:range_kit_tier2" },
       "C": { "item": "minecraft:netherite_ingot" }
     },
