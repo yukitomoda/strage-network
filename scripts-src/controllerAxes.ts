@@ -4,6 +4,7 @@ import {
   findPhysicalStoragePair,
   pruneOutOfRangeMembers,
 } from "./network";
+import { resetObserverSignal } from "./networkObserverProcessing";
 import { removeSettingsEntity as removeObserverSettingsEntity } from "./observerSettings";
 import { removeSettingsEntity as removeStorageSettingsEntity } from "./storageSettings";
 import { getAxisTier, UpgradeAxis } from "./upgrade";
@@ -69,6 +70,7 @@ function pruneRangeAxisMembers(dimension: Dimension, block: Block, player?: Play
   }
   for (const loc of removedObservers) {
     removeObserverSettingsEntity(dimension, loc);
+    resetObserverSignal(dimension, loc);
   }
 
   if (removedStorages.length > 0 || removedTerminals.length > 0 || removedObservers.length > 0) {

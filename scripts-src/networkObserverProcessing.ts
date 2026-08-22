@@ -1,4 +1,4 @@
-import { Dimension } from "@minecraft/server";
+import { Dimension, Vector3 } from "@minecraft/server";
 import { displayKeyEquals } from "./itemIdentity";
 import { NETWORK_OBSERVER_BLOCK_ID } from "./networkObserverBlock";
 import { getObserverSettings } from "./observerSettings";
@@ -56,4 +56,14 @@ export function recalculateNetworkObservers(dimension: Dimension, network: Netwo
     const signal = settings ? computeSignalStrength(catalog, settings) : 0;
     block.setPermutation(block.permutation.withState(SIGNAL_STATE as any, signal as any));
   }
+}
+
+// ネットワークから切断された(または範囲外で自動切断された)オブザーバーの信号強度を0に戻す。
+// 切断後は定期チェック(recalculateNetworkObservers)の対象から外れるため、切断時点の出力値が
+// そのまま残ってしまう不具合があった。wrench.tsでの手動切断・controllerAxes.tsでの
+// 範囲アップグレードによる自動切断の両方から呼ぶ。
+export function resetObserverSignal(dimension: Dimension, loc: Vector3): void {
+  const block = dimension.getBlock(loc);
+  if (!block?.isValid || block.typeId !== NETWORK_OBSERVER_BLOCK_ID) return;
+  block.setPermutation(block.permutation.withState(SIGNAL_STATE as any, 0 as any));
 }

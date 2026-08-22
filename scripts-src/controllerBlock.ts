@@ -4,6 +4,7 @@ import { removeSettingsEntity } from "./controllerSettings";
 import { showControllerUi } from "./controllerUi";
 import { endEditingSession, getEditingNetworkId } from "./editingSession";
 import { createNetwork, destroyNetwork, findNetworkByController } from "./network";
+import { resetObserverSignal } from "./networkObserverProcessing";
 import { getAxisTierFromPermutation, giveOrDropKits } from "./upgrade";
 
 export const CONTROLLER_COMPONENT_ID = "wh:controller";
@@ -34,6 +35,12 @@ export const controllerBlockComponent: BlockCustomComponent = {
     // プレイヤー自身が壊した場合も、他プレイヤーが編集中に誰かが壊した場合も同じ経路でカバーする。
     for (const p of world.getPlayers()) {
       if (getEditingNetworkId(p) === network.id) endEditingSession(p);
+    }
+
+    // 解体後はnetwork.observersごと消えてrecalculateNetworkObserversの対象から外れるため、
+    // 先にオブザーバーの信号だけ0に戻しておく(wrench.tsの手動切断と同じ理由、docs/design.md参照)。
+    for (const loc of network.observers) {
+      resetObserverSignal(dimension, loc);
     }
 
     destroyNetwork(network.id);

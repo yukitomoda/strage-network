@@ -725,6 +725,7 @@ UIフレームワークは `@minecraft/server-ui` の新しいリアクティブ
 - **モードの説明ラベルは選択中のモードの分だけ表示する**(実機での指摘を受けて修正): 当初は在庫モード/比較モードの説明を常に両方表示していたが、選択していない方の説明が紛らわしいという指摘を受け、`isStockMode`(在庫モードの説明)・`showItem2`(`!isStockMode`、比較モードの説明と品目2欄で共用)で出し分けるようにした。
 - **品目1/品目2の切り替えはトグルではなくドロップダウン**にした(`form.dropdown("設定先", targetSlot, [{label:"品目1",value:0},{label:"品目2",value:1}])`)。検索結果をタップした時、`targetSlot`の値(0/1)でどちらに設定するかを決める。
 - **最大値はスライダーではなくテキスト入力**にした(`form.textField`+`ObservableString`、数値としてパースして保存)。スライダーでは正確な値や数万単位の大きな値を指定しづらいという指摘を受けた(精密ターミナルのスロット番号入力と同じ理由・同じパターン)。不正な入力(数値としてパースできない、1未満)の場合は保存せず直前の値を維持する。
+- **(実機で発見された不具合の修正済み) 切断後も信号が残る**: レッドストーン出力がある状態でオブザーバーをネットワークから切断(手動切断・範囲アップグレードのTierダウンによる自動切断・**コントローラ自体の破壊**のいずれも)すると、切断後は`recalculateNetworkObservers`の対象(`network.observers`)から外れるため、二度と再計算されず**切断時点の出力値がそのまま残ってしまう**不具合があった。`networkObserverProcessing.ts`に`resetObserverSignal(dimension, loc)`(該当ブロックの`wh:signal_strength`を0に戻すだけの関数)を追加し、`wrench.ts`の手動切断(`toggleObserver`が`"disconnected"`を返した時)・`controllerAxes.ts`の`pruneRangeAxisMembers`(範囲外による自動切断)・**`controllerBlock.ts`の`onPlayerBreak`(コントローラ破壊による`destroyNetwork`の直前、`network.observers`全件)**の3箇所から呼ぶようにした。`destroyNetwork`はネットワークのデータを削除するだけでメンバーのブロック自体には触れないため、オブザーバー(実体としてワールドに残り続けるブロック)は明示的にリセットしないと直らない、という点を見落としていた。ブロック破壊(オブザーバー自身の`onPlayerBreak`)の場合はイベント発火時点で既にブロック自体が無くなっているため、この処理は不要(`resetObserverSignal`はブロックが存在しなければ何もしない)。
 
 ### クラフトレシピ
 

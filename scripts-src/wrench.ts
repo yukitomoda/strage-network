@@ -13,6 +13,7 @@ import {
   toggleTerminal,
 } from "./network";
 import { NETWORK_OBSERVER_BLOCK_ID } from "./networkObserverBlock";
+import { resetObserverSignal } from "./networkObserverProcessing";
 import { locEquals, NetworkData } from "./state";
 import { getDrain, removeSettingsEntity as removeStorageSettingsEntity, setDrain } from "./storageSettings";
 import { isTerminalLikeBlock } from "./terminalBlock";
@@ -166,6 +167,9 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     }
 
     const result = toggleObserver(editingNetworkId, block.location);
+    if (result === "disconnected") {
+      resetObserverSignal(dimension, block.location);
+    }
     player.sendMessage(result === "connected" ? "§bオブザーバーを接続しました。" : "§eオブザーバーを切断しました。");
     return;
   }
