@@ -17,6 +17,9 @@
     "wh_precision_terminal_icon": {
       "textures": "textures/blocks/precision_terminal_icon"
     },
+    "wh_network_observer_icon": {
+      "textures": "textures/blocks/network_observer_icon"
+    },
     "wh_speed_kit_tier1": {
       "textures": "textures/items/speed_kit_tier1"
     },

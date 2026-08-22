@@ -5,6 +5,7 @@ import { controllerBlockComponent } from "./controllerBlock";
 import { startInventoryTerminalCheckLoop } from "./inventoryCheck";
 import { inventoryTerminalBlockComponent } from "./inventoryTerminalBlock";
 import { startItemDescriptionWatcher } from "./itemDescriptions";
+import { networkObserverBlockComponent } from "./networkObserverBlock";
 import { startNetworkProcessingLoop } from "./networkProcessing";
 import { precisionTerminalBlockComponent } from "./precisionTerminalBlock";
 import { startPrecisionTerminalCheckLoop } from "./precisionTerminalCheck";
@@ -20,6 +21,7 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRe
   blockComponentRegistry.registerCustomComponent("wh:auto_terminal", autoTerminalBlockComponent);
   blockComponentRegistry.registerCustomComponent("wh:inventory_terminal", inventoryTerminalBlockComponent);
   blockComponentRegistry.registerCustomComponent("wh:precision_terminal", precisionTerminalBlockComponent);
+  blockComponentRegistry.registerCustomComponent("wh:network_observer", networkObserverBlockComponent);
   itemComponentRegistry.registerCustomComponent("wh:wrench", wrenchItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:test_filler", testFillerItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:upgrade_kit", upgradeKitItemComponent);

@@ -1,0 +1,18 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:network_observer"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "wh:terminal" },
+      "B": { "item": "minecraft:comparator" },
+      "C": { "item": "minecraft:redstone_block" },
+      "D": { "item": "minecraft:observer" }
+    },
+    "pattern": [" A ", "BCB", " D "],
+    "result": { "item": "wh:network_observer" },
+    "unlock": [{ "item": "wh:terminal" }]
+  }
+}

@@ -103,7 +103,9 @@ function processOrderCancels(network: NetworkData): void {
   setOrderCancels(network.id, []); // 消費済み
 }
 
-export function processNetworkOrders(network: NetworkData): void {
+// 戻り値は、このtickで1個以上のアイテムが実際にネットワークから搬出されたか
+// (networkObserverProcessing.tsの再計算を直ちにトリガすべきか、networkProcessing.ts参照)。
+export function processNetworkOrders(network: NetworkData): boolean {
   const dimension = world.getDimension(network.dimensionId);
 
   processOrderCancels(network);
@@ -111,6 +113,7 @@ export function processNetworkOrders(network: NetworkData): void {
 
   let budget = getOrderThroughput(getAxisTier(dimension, network.controller, CONTROLLER_SPEED_AXIS));
   let orders = getOrders(network.id);
+  let anyDelivered = false;
 
   while (budget > 0 && orders.length > 0) {
     const order = orders[0];
@@ -175,6 +178,7 @@ export function processNetworkOrders(network: NetworkData): void {
           );
     line.delivered += extracted;
     budget -= extracted;
+    if (extracted > 0) anyDelivered = true;
 
     // extracted < attempt は「予算不足」ではなく「真の在庫/受け皿不足」を意味する
     // (attempt自体が budget で既に絞られているため)
@@ -184,6 +188,8 @@ export function processNetworkOrders(network: NetworkData): void {
 
     if (budget <= 0) break;
   }
+
+  return anyDelivered;
 }
 
 function moveReadyIssuingEntries(network: NetworkData): void {

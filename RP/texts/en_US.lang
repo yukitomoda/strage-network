@@ -3,6 +3,7 @@ tile.wh:terminal.name=Warehouse Terminal
 tile.wh:auto_terminal.name=Auto Terminal
 tile.wh:inventory_terminal.name=Inventory Terminal
 tile.wh:precision_terminal.name=Precision Terminal
+tile.wh:network_observer.name=Network Observer
 item.wh:wrench=Warehouse Wrench
 item.wh:test_filler=[Test] Random Filler
 item.wh:speed_kit_tier1=T1 Speed Upgrade Kit
@@ -44,3 +45,5 @@ item.wh:auto_terminal.desc.1=§7§oA terminal that periodically exchanges items 
 item.wh:inventory_terminal.desc.1=§7§oA terminal that periodically exchanges items with storage so the network's stock approaches a target.
 item.wh:precision_terminal.desc.1=§7§oA terminal that maintains a target item in a specific slot of the storage, and can collect the contents of any other slot.
 item.wh:terminal_family.desc.usage=§7Place it on a storage and connect it to a network to use it.
+
+item.wh:network_observer.desc.1=§7§oOutputs a redstone signal based on the network's item counts.

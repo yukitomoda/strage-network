@@ -83,6 +83,7 @@ export function createNetwork(dimensionId: string, controller: Vector3): Network
     controller,
     storages: [],
     terminals: [],
+    observers: [],
   };
   setNetwork(network);
   setNetworkIds([...getNetworkIds(), network.id]);
@@ -110,7 +111,7 @@ export function findNetworkByController(dimensionId: string, loc: Vector3): Netw
   );
 }
 
-export type MemberRole = "controller" | "storage" | "terminal";
+export type MemberRole = "controller" | "storage" | "terminal" | "observer";
 
 export function findMembership(
   dimensionId: string,
@@ -121,6 +122,7 @@ export function findMembership(
     if (locEquals(network.controller, loc)) return { network, role: "controller" };
     if (network.storages.some((s) => locEquals(s, loc))) return { network, role: "storage" };
     if (network.terminals.some((t) => locEquals(t, loc))) return { network, role: "terminal" };
+    if (network.observers.some((o) => locEquals(o, loc))) return { network, role: "observer" };
   }
   return undefined;
 }
@@ -237,15 +239,17 @@ export function isWithinNetworkRange(network: NetworkData, loc: Vector3, range: 
 export function pruneOutOfRangeMembers(
   networkId: string,
   range: number
-): { removedStorages: Vector3[]; removedTerminals: Vector3[] } {
+): { removedStorages: Vector3[]; removedTerminals: Vector3[]; removedObservers: Vector3[] } {
   const network = getNetwork(networkId);
-  if (!network) return { removedStorages: [], removedTerminals: [] };
+  if (!network) return { removedStorages: [], removedTerminals: [], removedObservers: [] };
 
   const removedStorages = network.storages.filter((s) => !isWithinNetworkRange(network, s, range));
   const removedTerminals = network.terminals.filter((t) => !isWithinNetworkRange(network, t, range));
+  const removedObservers = network.observers.filter((o) => !isWithinNetworkRange(network, o, range));
   for (const s of removedStorages) removeStorage(networkId, s);
   for (const t of removedTerminals) removeTerminal(networkId, t);
-  return { removedStorages, removedTerminals };
+  for (const o of removedObservers) removeObserver(networkId, o);
+  return { removedStorages, removedTerminals, removedObservers };
 }
 
 export function toggleStorage(networkId: string, loc: Vector3): "connected" | "disconnected" {
@@ -274,6 +278,19 @@ export function toggleTerminal(networkId: string, loc: Vector3): "connected" | "
   return "connected";
 }
 
+export function toggleObserver(networkId: string, loc: Vector3): "connected" | "disconnected" {
+  const network = getNetwork(networkId);
+  if (!network) throw new Error(`network not found: ${networkId}`);
+  if (network.observers.some((o) => locEquals(o, loc))) {
+    network.observers = network.observers.filter((o) => !locEquals(o, loc));
+    setNetwork(network);
+    return "disconnected";
+  }
+  network.observers.push(loc);
+  setNetwork(network);
+  return "connected";
+}
+
 export function removeStorage(networkId: string, loc: Vector3): void {
   const network = getNetwork(networkId);
   if (!network) return;
@@ -285,6 +302,13 @@ export function removeTerminal(networkId: string, loc: Vector3): void {
   const network = getNetwork(networkId);
   if (!network) return;
   network.terminals = network.terminals.filter((t) => !locEquals(t, loc));
+  setNetwork(network);
+}
+
+export function removeObserver(networkId: string, loc: Vector3): void {
+  const network = getNetwork(networkId);
+  if (!network) return;
+  network.observers = network.observers.filter((o) => !locEquals(o, loc));
   setNetwork(network);
 }
 

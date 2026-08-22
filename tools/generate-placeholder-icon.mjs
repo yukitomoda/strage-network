@@ -77,6 +77,26 @@ function controllerColorAt(u, v) {
   return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
 }
 
+// インベントリ等で使う正面からの単純な2Dアイコン(controllerColorAtの構図を16x16へ縮めたもの)。
+function networkObserverIconColorAt(u, v) {
+  const bevel = edgeBevel(u, v, 0.1);
+  let [r, g, b] = [30, 40, 52];
+  if (bevel === 1) [r, g, b] = [r + 22, g + 22, b + 22];
+  else if (bevel === -1) [r, g, b] = [r - 18, g - 18, b - 18];
+
+  const dist = Math.hypot(u - 0.5, v - 0.5);
+  if (dist < 0.32) {
+    const t = 1 - Math.min(1, dist / 0.32);
+    r = 40 + 30 * t;
+    g = 120 + 80 * t;
+    b = 200 + 55 * t;
+    if (dist < 0.08) [r, g, b] = [230, 245, 255];
+  }
+
+  const n = (hashNoise(u, v) - 0.5) * 8;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
 // RP/models/blocks/terminal.geo.json の cube(size: [14, 14, 1], uv: [0, 0])に対応する
 // Box UVレイアウト。Minecraft/Blockbenchの標準的な展開順(west/north/east/south/up/down)で、
 // テクスチャ内のどの矩形を各面が使うかを計算する。dx=幅, dy=高さ, dz=奥行き(すべてテクスチャ
@@ -111,6 +131,46 @@ function makeBoxUvColorAt(canvasSize, dx, dy, dz, faceColorAt, edgeColor) {
     return edgeColor;
   };
 }
+
+// ネットワークオブザーバー(フルブロック、geometry.network_observerのBox UV)。信号を出す面
+// (ローカルsouth固定、BP/blocks/network_observer.jsonのredstone_producer.strongly_powered_face
+// と同じ面)だけ中央に同心円(目のような形)を乗せ、他の5面は無地の金属ケースにする。
+// minecraft:material_instancesはpermutations経由の切り替えに対応していない(実機で確認済み。
+// docs/design.md参照)ため、ジオメトリごとBox UVで回転するterminal.geo.jsonと同じ方式にした。
+const NETWORK_OBSERVER_CANVAS_SIZE = 64;
+const NETWORK_OBSERVER_BOX = [16, 16, 16]; // RP/models/blocks/network_observer.geo.jsonのcube sizeと一致させる
+
+function networkObserverFaceColorAt(face, lu, lv) {
+  const bevel = edgeBevel(lu, lv, 0.09);
+  let [r, g, b] = [30, 40, 52];
+  if (bevel === 1) [r, g, b] = [r + 22, g + 22, b + 22];
+  else if (bevel === -1) [r, g, b] = [r - 18, g - 18, b - 18];
+
+  const nearCornerU = Math.abs(lu - 0.14) < 0.035 || Math.abs(lu - 0.86) < 0.035;
+  const nearCornerV = Math.abs(lv - 0.14) < 0.035 || Math.abs(lv - 0.86) < 0.035;
+  if (nearCornerU && nearCornerV) [r, g, b] = [18, 22, 26];
+
+  if (face === "south") {
+    const dist = Math.hypot(lu - 0.5, lv - 0.5);
+    if (dist < 0.32) {
+      const t = 1 - Math.min(1, dist / 0.32);
+      r = 40 + 30 * t;
+      g = 120 + 80 * t;
+      b = 200 + 55 * t;
+      if (dist < 0.08) [r, g, b] = [230, 245, 255];
+    }
+  }
+
+  const n = (hashNoise(lu, lv) - 0.5) * 10;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
+const networkObserverColorAt = makeBoxUvColorAt(
+  NETWORK_OBSERVER_CANVAS_SIZE,
+  ...NETWORK_OBSERVER_BOX,
+  networkObserverFaceColorAt,
+  [30, 40, 52, 255]
+);
 
 // ターミナル系ブロック共通: 金属フレーム(ベベル)+走査線入りの発光スクリーン+電源ランプ。
 // screenTop/screenBottomの2色でスクリーン内の縦グラデーションを作り、種別ごとに配色を変える。
@@ -353,10 +413,12 @@ writePng("RP/textures/blocks/terminal.png", 32, terminalColorAt);
 writePng("RP/textures/blocks/auto_terminal.png", 32, autoTerminalColorAt);
 writePng("RP/textures/blocks/inventory_terminal.png", 32, inventoryTerminalColorAt);
 writePng("RP/textures/blocks/precision_terminal.png", 32, precisionTerminalColorAt);
+writePng("RP/textures/blocks/network_observer.png", NETWORK_OBSERVER_CANVAS_SIZE, networkObserverColorAt);
 writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
 writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);
 writePng("RP/textures/blocks/precision_terminal_icon.png", 16, precisionTerminalIconColorAt);
+writePng("RP/textures/blocks/network_observer_icon.png", 16, networkObserverIconColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
 speedKitColorAtByTier.forEach((colorAt, i) => {
   writePng(`RP/textures/items/speed_kit_tier${i + 1}.png`, 16, colorAt);

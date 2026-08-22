@@ -7,10 +7,12 @@ import {
   getAllNetworks,
   getNetwork,
   isWithinNetworkRange,
+  toggleObserver,
   resolveStorageMembership,
   toggleStorage,
   toggleTerminal,
 } from "./network";
+import { NETWORK_OBSERVER_BLOCK_ID } from "./networkObserverBlock";
 import { locEquals, NetworkData } from "./state";
 import { getDrain, removeSettingsEntity as removeStorageSettingsEntity, setDrain } from "./storageSettings";
 import { isTerminalLikeBlock } from "./terminalBlock";
@@ -22,6 +24,10 @@ import { CONTROLLER_RANGE_AXIS, getRangeForTier } from "./controllerAxes";
 import { getAxisTier } from "./upgrade";
 
 const HIGHLIGHT_INTERVAL = 10;
+
+// ネットワークオブザーバーの最大接続数。MVP: 固定値。将来はアップグレード軸(4章「グレード管理」
+// と同じ枠組み)にする想定だが、現時点では未実装(docs/design.md参照)。
+const MAX_OBSERVERS_PER_NETWORK = 3;
 
 // onUse は「ブロックに対して使った場合」も(onUseOnとは別に)発火してしまうため、
 // 視線の先にブロックが無い(=本当に空中で使った)場合だけモードメニューを開く。
@@ -139,6 +145,31 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     return;
   }
 
+  if (block.typeId === NETWORK_OBSERVER_BLOCK_ID) {
+    const network = getNetwork(editingNetworkId);
+    const alreadyConnected = network?.observers.some((o) => locEquals(o, block.location));
+    if (network && !alreadyConnected) {
+      // 新規接続(切断は範囲外でも常に許可する。ストレージ/ターミナルと同じ理由)。
+      if (!isWithinNetworkRange(network, block.location, getEffectiveRange(dimension, network))) {
+        player.sendMessage(
+          `§cコントローラから各方向に${getEffectiveRange(dimension, network)}マスを超えているため接続できません。`
+        );
+        return;
+      }
+
+      if (network.observers.length >= MAX_OBSERVERS_PER_NETWORK) {
+        player.sendMessage(
+          `§cネットワークオブザーバーは1ネットワークにつき最大${MAX_OBSERVERS_PER_NETWORK}基までしか接続できません。`
+        );
+        return;
+      }
+    }
+
+    const result = toggleObserver(editingNetworkId, block.location);
+    player.sendMessage(result === "connected" ? "§bオブザーバーを接続しました。" : "§eオブザーバーを切断しました。");
+    return;
+  }
+
   if (block.getComponent("inventory")?.container) {
     const network = getNetwork(editingNetworkId);
     const alreadyConnected = network?.storages.some((s) => locEquals(s, block.location));
@@ -237,7 +268,7 @@ function highlightEditingNetwork(player: Player): void {
     return;
   }
 
-  const points = [network.controller, ...network.storages, ...network.terminals];
+  const points = [network.controller, ...network.storages, ...network.terminals, ...network.observers];
   for (const p of points) spawnHighlightParticle(dimension, "minecraft:villager_happy", p);
 }
 

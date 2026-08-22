@@ -36,6 +36,12 @@ const WRENCH_LORE: RawMessage[] = [
 
 const CONTROLLER_LORE: RawMessage[] = [{ translate: "item.wh:controller.desc.1" }, BLANK_LINE, ADDON_SIGNATURE_LINE];
 
+const NETWORK_OBSERVER_LORE: RawMessage[] = [
+  { translate: "item.wh:network_observer.desc.1" },
+  BLANK_LINE,
+  ADDON_SIGNATURE_LINE,
+];
+
 // ターミナル系(基本/自動/在庫管理)は「概要1行(種別ごとに違う)+使い方1行(共通)」という
 // 同じ構造なので、概要のlangキーだけ差し替えて使い回す。
 function terminalFamilyLore(summaryKey: string): RawMessage[] {
@@ -117,6 +123,7 @@ const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
   "wh:auto_terminal": AUTO_TERMINAL_LORE,
   "wh:inventory_terminal": INVENTORY_TERMINAL_LORE,
   "wh:precision_terminal": PRECISION_TERMINAL_LORE,
+  "wh:network_observer": NETWORK_OBSERVER_LORE,
   "wh:speed_kit_tier1": () => buildSpeedKitLore(1),
   "wh:speed_kit_tier2": () => buildSpeedKitLore(2),
   "wh:speed_kit_tier3": () => buildSpeedKitLore(3),

@@ -11,6 +11,7 @@ export type NetworkData = {
   controller: Vector3;
   storages: Vector3[];
   terminals: Vector3[];
+  observers: Vector3[];
 };
 
 export type OrderLine = {
@@ -110,6 +111,17 @@ export type PrecisionSlotLine = {
   itemName?: string;
   targetAmount: number; // 0 = 目標なし
   collect: boolean; // 目標外/余剰分をネットワークへ回収するか
+};
+
+// ネットワークオブザーバーの設定。在庫モード(itemTypeId+maxAmount)/比較モード
+// (itemTypeId+itemTypeId2)のどちらかを使う(networkObserverProcessing.ts参照)。
+export type ObserverSettings = {
+  mode: "stock" | "compare";
+  itemTypeId?: string; // 在庫モード: 対象品目 / 比較モード: 1つ目の品目
+  itemName?: string;
+  maxAmount?: number; // 在庫モードのみ
+  itemTypeId2?: string; // 比較モードのみ: 2つ目の品目
+  itemName2?: string;
 };
 
 // 倉庫の整理(コントローラのタスク定期実行の仕組みに乗せる)。引き出し/預け入れと違い搬入出先が

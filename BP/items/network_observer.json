@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.100",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:network_observer",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_network_observer_icon",
+      "minecraft:block_placer": {
+        "block": "wh:network_observer"
+      },
+      "minecraft:display_name": {
+        "value": "tile.wh:network_observer.name"
+      }
+    }
+  }
+}

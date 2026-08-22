@@ -4,6 +4,7 @@ import {
   findPhysicalStoragePair,
   pruneOutOfRangeMembers,
 } from "./network";
+import { removeSettingsEntity as removeObserverSettingsEntity } from "./observerSettings";
 import { removeSettingsEntity as removeStorageSettingsEntity } from "./storageSettings";
 import { getAxisTier, UpgradeAxis } from "./upgrade";
 
@@ -57,19 +58,22 @@ function pruneRangeAxisMembers(dimension: Dimension, block: Block, player?: Play
 
   const tier = getAxisTier(dimension, block.location, CONTROLLER_RANGE_AXIS);
   const range = getRangeForTier(tier);
-  const { removedStorages, removedTerminals } = pruneOutOfRangeMembers(network.id, range);
+  const { removedStorages, removedTerminals, removedObservers } = pruneOutOfRangeMembers(network.id, range);
 
-  // ストレージは手動切断(wrench.ts)と同じく設定エンティティも掃除する。ターミナルは
-  // 手動切断でも掃除していないため、ここでも揃えて何もしない。
+  // ストレージ・オブザーバーは手動切断(wrench.ts)と同じく設定エンティティも掃除する。
+  // ターミナルは手動切断でも掃除していないため、ここでも揃えて何もしない。
   for (const loc of removedStorages) {
     removeStorageSettingsEntity(dimension, loc);
     const pair = findPhysicalStoragePair(dimension, loc);
     if (pair) removeStorageSettingsEntity(dimension, pair);
   }
+  for (const loc of removedObservers) {
+    removeObserverSettingsEntity(dimension, loc);
+  }
 
-  if (removedStorages.length > 0 || removedTerminals.length > 0) {
+  if (removedStorages.length > 0 || removedTerminals.length > 0 || removedObservers.length > 0) {
     player?.sendMessage(
-      `§e範囲が縮小したため、ストレージ${removedStorages.length}台・ターミナル${removedTerminals.length}台の接続が解除されました。`
+      `§e範囲が縮小したため、ストレージ${removedStorages.length}台・ターミナル${removedTerminals.length}台・オブザーバー${removedObservers.length}台の接続が解除されました。`
     );
   }
 }

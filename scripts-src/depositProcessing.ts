@@ -119,7 +119,9 @@ function processDepositCancels(network: NetworkData): void {
   setDepositCancels(network.id, []); // 消費済み
 }
 
-export function processNetworkDeposits(network: NetworkData): void {
+// 戻り値は、このtickで1個以上のアイテムが実際にネットワークへ搬入されたか
+// (networkObserverProcessing.tsの再計算を直ちにトリガすべきか、networkProcessing.ts参照)。
+export function processNetworkDeposits(network: NetworkData): boolean {
   const dimension = world.getDimension(network.dimensionId);
 
   processDepositCancels(network);
@@ -127,7 +129,7 @@ export function processNetworkDeposits(network: NetworkData): void {
 
   let budget = getDepositThroughput(getAxisTier(dimension, network.controller, CONTROLLER_SPEED_AXIS));
   let requests = getDeposits(network.id);
-  if (requests.length === 0) return;
+  if (requests.length === 0) return false;
 
   // 「どのストレージに何が既にあるか」の索引は、このtickのこのネットワーク分だけ1回作って使い回す。
   // 品目ごとに全ストレージを舐め直すと、大規模なネットワーク(例:ラージチェスト30個=1620スロット)で
@@ -137,6 +139,7 @@ export function processNetworkDeposits(network: NetworkData): void {
   // Drain指定されたストレージは預け入れ先として選ばれない(倉庫レンチのDrainモード参照)。
   // これも品目ごとに問い合わせず、ネットワークにつき1tick1回だけ判定してリストにしておく。
   const depositTargets = network.storages.filter((loc) => !getDrain(dimension, loc));
+  let anyInserted = false;
 
   while (budget > 0 && requests.length > 0) {
     const request = requests[0];
@@ -200,6 +203,7 @@ export function processNetworkDeposits(network: NetworkData): void {
           );
     line.delivered += inserted;
     budget -= inserted;
+    if (inserted > 0) anyInserted = true;
 
     // inserted < attempt は「予算不足」ではなく「搬入元に無い/搬入先が満杯」を意味する
     // (attempt自体が budget で既に絞られているため)
@@ -209,6 +213,8 @@ export function processNetworkDeposits(network: NetworkData): void {
 
     if (budget <= 0) break;
   }
+
+  return anyInserted;
 }
 
 function moveReadyDepositIssuingEntries(network: NetworkData): void {

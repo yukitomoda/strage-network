@@ -672,3 +672,60 @@ UIフレームワークは `@minecraft/server-ui` の新しいリアクティブ
 - **prodパックは、devの内容を丸ごとコピーし、`manifest.json`の識別情報(`header.uuid`/`modules[].uuid`/相互の`dependencies[].uuid`/`header.name`)だけ差し替えたビルド生成物**(`tools/build-release.mjs`)。UUIDは`tools/releaseConfig.mjs`に固定値として埋め込んであり、以後変更しない(理由はdevと同じ: 変えると既存のprodワールドとの紐付けが切れるため)。`module`の対応付けは配列の並び順ではなく`type`(`"data"`/`"script"`/`"resources"`)で照合しているため、将来`modules`の順序が変わっても壊れない。
 - **`.mcaddon`として生成し、インストールもその`.mcaddon`経由で行う**(`mise run release`→`tools/build-release.mjs`が`dist/StorageNetworkBP.mcpack`・`dist/StorageNetworkRP.mcpack`を作り、その2つをまとめて`dist/StorageNetwork.mcaddon`にする。`mise run install:prod`→`tools/install-prod.mjs`がその`.mcaddon`をOS既定の関連付け(Minecraft)で開く、Windowsの`start`コマンド経由)。dev用の`tools/install.mjs`(シンボリックリンク配置)とは仕組みが根本的に異なるため別スクリプトに分離した。generate-and-symlinkではなくMinecraft本来のインポート経路を実際に通すことで、「配布物として実際にインポートできるか」を自分自身で検証できる。将来他人に`.mcaddon`を配布する可能性を見据えて、この生成物がそのまま配布物になる構成にしてある。
 - **zipの生成は外部ライブラリを追加せず自前実装した**(`tools/zip.mjs`)。`package.json`にzip関連の依存が無く、PNG生成(`tools/generate-placeholder-icon.mjs`)も同様にzlib+手組みのチャンク書き込みで自前実装している前例があったため、同じ方針を踏襲した。CRC32のアルゴリズムはPNG生成スクリプトと共通(標準的なpoly `0xEDB88320`のテーブル方式)。圧縮はせず**ストア方式(無圧縮)**にすることで、Deflateエンコーダの実装コストを避けている(Minecraftのインポートは無圧縮でも問題なく読み込める)。`.NET`の`System.IO.Compression.ZipFile`で読み戻して構造とバイト内容が一致することを確認済み。
+
+## 13. ネットワークオブザーバー(`wh:network_observer`)
+
+倉庫ネットワークの在庫状況をレッドストーン回路から読み取れるようにする、新しいブロック。フルブロックで1面だけに信号を出す(バニラのオブザーバーと同じ操作感)。
+
+- **在庫モード**: 1品目+最大値を設定。信号強度はバニラの**コンパレーターのコンテナ充填率読み取りと同じ式**を使う(ユーザー承認済み): `在庫==0→0`、`在庫>=最大値→15`、それ以外は`floor((在庫/最大値)*14)+1`(`networkObserverProcessing.ts`の`stockSignal`)。
+- **比較モード**: 2品目を設定。`品目1<品目2→0`、`==→7`、`品目1>品目2→15`(`compareSignal`)。
+
+### 可変強度のレッドストーン出力: `minecraft:redstone_producer`
+
+`power`(0〜15)が固定値のコンポーネントなので、動的な信号強度はこのアドオンで既に使っているカスタムブロックステート+`permutations`の手法(コントローラの`wh:speed_tier`等と同じ)で実現している。`wh:signal_strength`(0〜15の16値)ステートを持たせ、Tierごとの`permutations`で対応する`power`を設定する(`BP/blocks/network_observer.json`)。`format_version`は1.21.120以上が必要なため、`BP`/`RP`両方の`manifest.json`の`min_engine_version`を`[1, 21, 120]`に上げた。
+
+### 設置方向: バニラのオブザーバーと同じ操作感にする
+
+クリックした面基準の`minecraft:placement_position`(ターミナル系で使用)ではなく、**`minecraft:placement_direction`トレイト**(`enabled_states: ["minecraft:facing_direction"]`)を使う。これはプレイヤーの向いている方向(上下含む6方向)に基づいて設置され、バニラのオブザーバー/ディスペンサー/ピストン等と同じ挙動になる(`minecraft:cardinal_direction`は4方向・水平のみのため今回の用途には合わない)。
+
+信号出力はバニラのオブザーバーと同じく、設置時に正面が向いた方向の**逆(背面)**から出す。`wh:signal_strength`用の16 permutationsとは**別に**、`facing_direction`ごとの`minecraft:transformation.rotation`を設定する6 permutationsを用意し、`redstone_producer`側は常にローカル座標系で`strongly_powered_face: "south"`・`transform_relative: true`を指定しておくことで、実際の出力方向が回転に応じて自動的に読み替えられるようにしている(異なる状態次元の`permutations`は独立に評価され、コンポーネントごとにマージされる。既存の`terminal.json`が「他のコンポーネントを再宣言せず`minecraft:transformation`だけ書く」形で成立していることが、この重ね合わせの前提を裏付けている)。
+
+回転値は当初Minecraftの標準的なyaw規則(yaw0=south、yaw90=west、yaw180=north、yaw270=east)から類推して導出したが、**実機ではnorth/southは合っていたもののeast/west(Y軸回転)が逆になっていた**(180°回転は符号を反転しても結果が同じため、north/southだけでは食い違いが表面化しなかった)。east/west用の回転を符号反転して解消した。この時、同じ理屈がX軸回転(up/down)にも及ぶだろうと考えup/downも一緒に符号反転したが、**これは誤りだった**: 実機ではup/downは最初の値(符号反転前)が正しく、Y軸回転の符号違いがそのままX軸に当てはまるわけではなかった。up/downは元の値に戻して解消した。最終的な値:
+
+| `facing_direction` | 背面(出力方向) | `rotation` |
+|---|---|---|
+| north | south | `[0, 0, 0]` |
+| south | north | `[0, 180, 0]` |
+| east | west | `[0, -90, 0]` |
+| west | east | `[0, 90, 0]` |
+| up | down | `[90, 0, 0]` |
+| down | up | `[-90, 0, 0]` |
+
+**実機で動作確認済み**: 「独立した2つの状態次元の`permutations`が両方同時に適用される」という前提、`transform_relative`の意味論は実機で確認できた。回転値はY軸(east/west)のみ符号反転が必要で、X軸(up/down)は当初の値のままで正しかった(**Y軸とX軸で回転の正負の規則が異なる**ことが実機で判明した。今後同様のブロックを作る際は、軸ごとに個別に実機確認する必要がある)。
+
+**出力面の見た目を区別する**(実機での指摘を受けて追加、3回試行して現在の方式に落ち着いた): 6面とも同じテクスチャだと、実際に信号を確認するまでどちらが出力面か分からず紛らわしいという指摘があった。
+- **1回目の実装(不採用)**: `minecraft:block`直下のベース`components`にローカル`"south"`面だけ専用テクスチャを割り当て、「`material_instances`も`redstone_producer`の`transform_relative`と同じく`minecraft:transformation`の回転に追従するはず」という前提で実装した。実機ではこの前提が誤りだったばかりか、レッドストーン信号自体も出なくなってしまった(ベースの`components`に`material_instances`を追加したことが`redstone_producer`側の解決にも影響したと見られるが、因果関係は未特定)。
+- **2回目の実装(不採用)**: ベースの`material_instances`は`"*"`のみに戻し、代わりに`facing_direction`ごとの6つの`permutations`(`minecraft:transformation`と同じ場所)に、その向きで実際に出力面となる**ワールド座標系の面名**を明示的に指定した`material_instances`を追加した。信号は復活したが、**実機ではどの向きに設置しても常に同じ面(最初の`north`用permutationの面)にテクスチャが付いてしまった**。`minecraft:material_instances`は(`minecraft:transformation`と違い)`permutations`をまたいだ状態ごとの切り替えにそもそも対応していないと見られる。
+- **3回目の実装(採用)**: `minecraft:material_instances`によるテクスチャの出し分けを諦め、**terminal.jsonで既に実機確認済みのBox UV方式**(1枚のテクスチャに6面分を焼き込み、ジオメトリ全体を`minecraft:transformation`で回転させる)に切り替えた。専用のカスタムジオメトリ`geometry.network_observer`(`RP/models/blocks/network_observer.geo.json`、16×16×16の単純な立方体、`uv: [0, 0]`によるバニラ標準のBox UV展開)を新設し、`minecraft:geometry.full_block`から差し替えた。テクスチャ生成(`tools/generate-placeholder-icon.mjs`)は`makeBoxUvColorAt`(既存の`terminalFamilyColorAt`と共通の仕組み)を使い、ローカル`south`面(`redstone_producer`の`strongly_powered_face`と同じ面)だけに同心円(目)のモチーフを乗せ、他の5面は無地の金属ケースにする。ジオメトリ自体の回転は`minecraft:transformation`で(実機確認済みの)`redstone_producer`と同じ仕組みを使うため、信号の出る面とテクスチャの目印が一致する。
+
+### 即時/定期の再計算トリガ
+
+- **コントローラによる引き出し/預け入れ(=ネットワークの在庫が実際に増減する瞬間)は直ちに再計算する**。`orderProcessing.ts`の`processNetworkOrders`・`depositProcessing.ts`の`processNetworkDeposits`の戻り値を`void`から`boolean`(そのtickで1個以上のアイテムが実際に配送/搬入されたか)に変え、`networkProcessing.ts`の`startNetworkProcessingLoop`がどちらかtrueなら`recalculateNetworkObservers`(新規`networkObserverProcessing.ts`)を直ちに呼ぶ。
+- **プレイヤーによる手動でのストレージ出し入れは、5サイクルごとの定期再計算で反映される**。「サイクル」はこのネットワークの処理サイクル(周期アップグレード軸のTierに応じて可変)単位で数える(tick単位ではない)。ネットワークIDごとに「前回再計算からの経過サイクル数」を`Map`(`lastProcessedTick`と同じ発想)で数え、5に達したら再計算する(直ちに再計算した場合はこのカウンタもリセットする)。
+- `recalculateNetworkObservers`は、対象ネットワークの`scanCatalog`を1回だけ呼び、最大3基のオブザーバー全てに使い回す(`depositProcessing.ts`の`buildStorageIndex`と同じ、ネットワークにつき1回のスキャンで済ませる考え方)。
+
+### 接続・データモデル
+
+`network.ts`にストレージ/ターミナルと同じ形で`observers: Vector3[]`・`toggleObserver`/`removeObserver`を追加し、`wrench.ts`の`handleBuildModeUse`に3つ目の分岐として組み込んだ(範囲チェックは他の2種と共通、新規接続時のみ`network.observers.length >= 3`なら「最大3基まで」のメッセージで拒否する)。**最大接続数はMVPでは固定値**で、将来コントローラのアップグレード軸(4章「グレード管理」と同じ枠組み)にする構想はあるが今回は実装していない。範囲アップグレード軸のTierダウン時の自動切断(`controllerAxes.ts`の`pruneRangeAxisMembers`)にもオブザーバーを含めた。
+
+設定(モード・対象品目・最大値)は`storageSettings.ts`と全く同じ発想の非表示エンティティ`wh:observer_settings`(新規`observerSettings.ts`)に持たせる。UI(`observerUi.ts`)は素手での右クリックで開くCustomFormで、モード切替トグル・品目1/品目2の検索(在庫モードでは品目1のみ使う)・最大値を持つ。ターミナル系と違い引き出し/預け入れを行わないため「状況」タブは無い。
+
+- **(実機で発見された不具合の修正済み) 設定が保存されない**: `observerSettings.ts`はストレージ/ターミナルの設定エンティティと同じ`ensureSettingsEntity`パターンで`dimension.spawnEntity("wh:observer_settings", ...)`を呼んでいたが、**このエンティティ自体をBP/RP双方に定義するのを忘れていた**(`storage_settings`/`terminal_settings`と違い`BP/entities/observer_settings.json`等が存在しなかった)。未定義のエンティティタイプへの`spawnEntity`は失敗するため、`setObserverSettings`が静かに失敗し続けていた。UI側はラベル(`item1Label.setData()`等)を`persist()`より先に更新していたため、見た目には設定が反映されたように見えても実際には保存されていない、という分かりにくい不具合になっていた。`BP/entities/observer_settings.json`・`RP/entity/observer_settings.json`・`RP/models/entity/observer_settings.geo.json`(空のbones、完全に不可視)・`RP/render_controllers/observer_settings.rc.json`を、`storage_settings`と全く同じ内容で追加して解消した。
+
+- **モードの説明ラベルは選択中のモードの分だけ表示する**(実機での指摘を受けて修正): 当初は在庫モード/比較モードの説明を常に両方表示していたが、選択していない方の説明が紛らわしいという指摘を受け、`isStockMode`(在庫モードの説明)・`showItem2`(`!isStockMode`、比較モードの説明と品目2欄で共用)で出し分けるようにした。
+- **品目1/品目2の切り替えはトグルではなくドロップダウン**にした(`form.dropdown("設定先", targetSlot, [{label:"品目1",value:0},{label:"品目2",value:1}])`)。検索結果をタップした時、`targetSlot`の値(0/1)でどちらに設定するかを決める。
+- **最大値はスライダーではなくテキスト入力**にした(`form.textField`+`ObservableString`、数値としてパースして保存)。スライダーでは正確な値や数万単位の大きな値を指定しづらいという指摘を受けた(精密ターミナルのスロット番号入力と同じ理由・同じパターン)。不正な入力(数値としてパースできない、1未満)の場合は保存せず直前の値を維持する。
+
+### クラフトレシピ
+
+ユーザー指定、自動端末と同じ`[" A ", "BCB", " D "]`型: 上=`wh:terminal`(ネットワーク接続の意味)、左右=`minecraft:comparator`×2(比較機能の比喩)、中央=`minecraft:redstone_block`(駆動源)、下=`minecraft:observer`(観測機能の比喩)。
