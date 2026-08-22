@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# バージョン採番のコミットpush・リリース作成の両方に書き込み権限が要る。
+permissions:
+  contents: write
+
+# 連続pushで複数の実行が同時に走ると、バージョン採番(patchの+1)が競合するため直列化する。
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # 保険。デフォルトのGITHUB_TOKENによるpushはそもそもpushイベントを再発火させない
+    # (GitHubの再帰実行防止機構)ため本来は無くても無限ループしないが、明示しておく。
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Bump version
+        id: bump
+        run: node tools/bump-version.mjs
+
+      - name: Build
+        run: npm run build
+
+      - name: Build release package
+        run: node tools/build-release.mjs
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add BP/manifest.json RP/manifest.json
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git push
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.bump.outputs.version }}
+          name: v${{ steps.bump.outputs.version }}
+          target_commitish: main
+          files: dist/StorageNetwork.mcaddon

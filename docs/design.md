@@ -674,6 +674,17 @@ UIフレームワークは `@minecraft/server-ui` の新しいリアクティブ
 - **`.mcaddon`として生成し、インストールもその`.mcaddon`経由で行う**(`mise run release`→`tools/build-release.mjs`が`dist/StorageNetworkBP.mcpack`・`dist/StorageNetworkRP.mcpack`を作り、その2つをまとめて`dist/StorageNetwork.mcaddon`にする。`mise run install:prod`→`tools/install-prod.mjs`がその`.mcaddon`をOS既定の関連付け(Minecraft)で開く、Windowsの`start`コマンド経由)。dev用の`tools/install.mjs`(シンボリックリンク配置)とは仕組みが根本的に異なるため別スクリプトに分離した。generate-and-symlinkではなくMinecraft本来のインポート経路を実際に通すことで、「配布物として実際にインポートできるか」を自分自身で検証できる。将来他人に`.mcaddon`を配布する可能性を見据えて、この生成物がそのまま配布物になる構成にしてある。
 - **zipの生成は外部ライブラリを追加せず自前実装した**(`tools/zip.mjs`)。`package.json`にzip関連の依存が無く、PNG生成(`tools/generate-placeholder-icon.mjs`)も同様にzlib+手組みのチャンク書き込みで自前実装している前例があったため、同じ方針を踏襲した。CRC32のアルゴリズムはPNG生成スクリプトと共通(標準的なpoly `0xEDB88320`のテーブル方式)。圧縮はせず**ストア方式(無圧縮)**にすることで、Deflateエンコーダの実装コストを避けている(Minecraftのインポートは無圧縮でも問題なく読み込める)。`.NET`の`System.IO.Compression.ZipFile`で読み戻して構造とバイト内容が一致することを確認済み。
 
+### CD(GitHub Actions、`.github/workflows/release.yml`)
+
+mainブランチへのpushのたびに、自動でビルド・バージョン採番・GitHub Releaseの作成(`.mcaddon`をアセットとして添付)まで行う。
+
+- **バージョン採番: patchを+1し、リポジトリへコミットして残す**。Minecraftはパックの更新を`header.version`の差分で判定するため、バージョン番号を変えないまま`.mcaddon`を作り直しても、既にインポート済みの環境では「更新」と認識されない可能性がある。そのため`tools/bump-version.mjs`(新規)が`BP/manifest.json`・`RP/manifest.json`の`header.version`・`modules[].version`・お互いを指す`dependencies[].version`(4種類の`"version": [a, b, c]`パターン、全ファイルで常に同じ値に揃える既存の手動運用を踏襲)のpatchだけ一括で+1し、CIがそのまま`git commit`(コミットメッセージ末尾に`[skip ci]`)して`push`する。
+  - **`JSON.parse`→`JSON.stringify`で書き戻さなかった理由**: `manifest.json`は人力整形されたファイルで、バージョン配列は`[0, 3, 0]`のように1行にまとめて書かれている。素朴に`JSON.stringify(obj, null, 2)`で書き戻すと配列が複数行に展開され、変更していない`min_engine_version`等まで巻き込んで無関係な差分が大量に出てしまう。そのため対象の`"version": [a, b, c]`パターンだけを正規表現でその場置換する方式にした(`"min_engine_version"`は文字列として`"version":`という部分文字列を含まない=キー名の直前に`"`が来ないため、誤って一致しない)。
+- **バージョン採番によるCIの無限ループを心配したが、対策は不要と判明**: GitHub Actionsは「デフォルトの`GITHUB_TOKEN`によるpushは、たとえ`on: push`のワークフローが設定されていても新しい実行を作らない」という再帰防止の仕組みを標準で持っている(公式ドキュメントで確認済み)。そのため、CIが`bump-version`のコミットをpushしてもワークフローが再度自身を起動することは無い。念のためコミットメッセージに`[skip ci]`も付けているが、これは保険であり必須ではない。
+- **リリース方式は「コミットごとに新規作成」を採用**(ユーザーの選択、ローリング1本の`latest`更新ではなく)。バージョンが必ず単調増加するため、タグ名`v{version}`(例: `v0.3.1`)が衝突することはない。アセット添付には`softprops/action-gh-release`を使い、`tools/build-release.mjs`が生成する`dist/StorageNetwork.mcaddon`のみを公開する(`.mcpack`単体2つは中間生成物として添付しない)。
+- **CIでも`npm run typecheck`を通してからビルド・コミットする**(ローカルの開発フローと同じゲート)。型エラーがあるコミットではバージョンが採番されず、壊れたリリースが公開されない。
+- **`permissions: contents: write`が必須**(バージョン採番コミットのpush・リリース作成の両方に書き込み権限が要る)。連続pushでpatch採番が競合しないよう`concurrency`で同一グループの実行を直列化している。
+
 ## 13. ネットワークオブザーバー(`wh:network_observer`)
 
 倉庫ネットワークの在庫状況をレッドストーン回路から読み取れるようにする、新しいブロック。フルブロックで1面だけに信号を出す(バニラのオブザーバーと同じ操作感)。
