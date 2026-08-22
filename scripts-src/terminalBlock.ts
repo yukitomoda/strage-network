@@ -60,6 +60,14 @@ export function getAttachedStorageLocation(block: Block): Vector3 {
   }
 }
 
+// ターミナル自身がレッドストーン通電中かどうか。
+// 当初は張り付いた先の実コンテナ(チェスト等)で受信する設計だったが、
+// Block.getRedstonePower()は通常のコンテナブロックでは値が定義されない(実機で確認済み)ため、
+// minecraft:redstone_consumerを持つターミナル自身の位置で受信する方式に変更した(docs/design.md参照)。
+export function isRedstoneLocked(block: Block): boolean {
+  return (block.getRedstonePower() ?? 0) > 0;
+}
+
 export const terminalBlockComponent: BlockCustomComponent = {
   onPlace(event) {
     const { block, dimension } = event;

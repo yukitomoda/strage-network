@@ -5,7 +5,7 @@
     "description": "個人利用向けの倉庫(ストレージネットワーク)アドオン (リソースパック)",
     "uuid": "d75168b3-89a2-49cf-ba6e-bcbc9d5a16ae",
     "version": [0, 3, 0],
-    "min_engine_version": [1, 21, 120]
+    "min_engine_version": [1, 26, 0]
   },
   "modules": [
     {

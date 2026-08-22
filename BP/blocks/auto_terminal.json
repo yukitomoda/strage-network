@@ -1,5 +1,5 @@
 {
-  "format_version": "1.21.100",
+  "format_version": "1.26.0",
   "minecraft:block": {
     "description": {
       "identifier": "wh:auto_terminal",
@@ -52,6 +52,9 @@
           14,
           2
         ]
+      },
+      "minecraft:redstone_consumer": {
+        "min_power": 0
       },
       "wh:auto_terminal": {}
     },

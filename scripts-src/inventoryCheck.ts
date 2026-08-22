@@ -4,7 +4,7 @@ import { getAllNetworks } from "./network";
 import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { DepositLine, NetworkData, OrderLine, StockTargetLine } from "./state";
 import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
-import { getAttachedStorageLocation, INVENTORY_TERMINAL_BLOCK_ID } from "./terminalBlock";
+import { getAttachedStorageLocation, INVENTORY_TERMINAL_BLOCK_ID, isRedstoneLocked } from "./terminalBlock";
 import { getInventoryAutoDeposit, getStockTargets } from "./terminalSettings";
 
 // MVP: 固定値(5秒)。自動端末(autoOrderCheck.ts)と同じ考え方。
@@ -40,6 +40,8 @@ function checkNetworkInventoryTerminals(network: NetworkData): void {
   const networkCatalog = scanCatalog(dimension, network);
 
   for (const { loc: terminalLoc, block } of inventoryTerminals) {
+    if (isRedstoneLocked(block)) continue;
+
     const targets = getStockTargets(dimension, terminalLoc);
     const autoDeposit = getInventoryAutoDeposit(dimension, terminalLoc);
     if (targets.length === 0 && !autoDeposit) continue;

@@ -3,7 +3,7 @@ import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
 import { getAllNetworks } from "./network";
 import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { CatalogEntry, scanContainerCatalog } from "./storageScan";
-import { AUTO_TERMINAL_BLOCK_ID, getAttachedStorageLocation } from "./terminalBlock";
+import { AUTO_TERMINAL_BLOCK_ID, getAttachedStorageLocation, isRedstoneLocked } from "./terminalBlock";
 import { getAutoDeposit, getWishlist } from "./terminalSettings";
 import { DepositLine, NetworkData, OrderLine, WishlistLine } from "./state";
 
@@ -30,6 +30,7 @@ function checkNetworkAutoTerminals(network: NetworkData): void {
   for (const terminalLoc of network.terminals) {
     const block = dimension.getBlock(terminalLoc);
     if (!block?.isValid || block.typeId !== AUTO_TERMINAL_BLOCK_ID) continue;
+    if (isRedstoneLocked(block)) continue;
 
     const wishlist = getWishlist(dimension, terminalLoc);
     const autoDeposit = getAutoDeposit(dimension, terminalLoc);

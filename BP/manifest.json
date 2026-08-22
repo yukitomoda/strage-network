@@ -5,7 +5,7 @@
     "description": "個人利用向けの倉庫(ストレージネットワーク)アドオン (ビヘイビアパック)",
     "uuid": "290ed4cf-9a04-4ec2-9b8c-9ef37c36653c",
     "version": [0, 3, 0],
-    "min_engine_version": [1, 21, 120]
+    "min_engine_version": [1, 26, 0]
   },
   "modules": [
     {

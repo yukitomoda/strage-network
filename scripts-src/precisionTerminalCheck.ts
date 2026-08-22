@@ -3,7 +3,7 @@ import { hasPendingSlotDepositFor, submitDeposit } from "./depositProcessing";
 import { getAllNetworks } from "./network";
 import { hasPendingSlotOrderFor, submitOrder } from "./orderProcessing";
 import { NetworkData, PrecisionSlotLine } from "./state";
-import { getAttachedStorageLocation, PRECISION_TERMINAL_BLOCK_ID } from "./terminalBlock";
+import { getAttachedStorageLocation, isRedstoneLocked, PRECISION_TERMINAL_BLOCK_ID } from "./terminalBlock";
 import { getPrecisionSlots } from "./terminalSettings";
 
 // autoOrderCheck.tsのAUTO_CHECK_INTERVAL_TICKSと同じ間隔(5秒)。MVP: 固定値。
@@ -27,6 +27,7 @@ function checkNetworkPrecisionTerminals(network: NetworkData): void {
   for (const terminalLoc of network.terminals) {
     const block = dimension.getBlock(terminalLoc);
     if (!block?.isValid || block.typeId !== PRECISION_TERMINAL_BLOCK_ID) continue;
+    if (isRedstoneLocked(block)) continue;
 
     const slots = getPrecisionSlots(dimension, terminalLoc);
     if (slots.length === 0) continue;
