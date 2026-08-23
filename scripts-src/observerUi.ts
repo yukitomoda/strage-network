@@ -7,6 +7,7 @@ import {
   ObservableUIRawMessage,
   UIRawMessage,
 } from "@minecraft/server-ui";
+import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { getObserverSettings, setObserverSettings } from "./observerSettings";
 import { ObserverSettings } from "./state";
@@ -67,8 +68,8 @@ export function showObserverUi(player: Player, block: Block): void {
   }
 
   function refreshSearch(): void {
-    const q = searchText.getData().trim().toLowerCase();
-    const allMatches = networkCatalog.filter((entry) => entry.label.toLowerCase().includes(q));
+    const q = searchText.getData();
+    const allMatches = networkCatalog.filter((entry) => matchesSearchQuery(entry, q, player.clientSystemInfo.locale));
     const totalPages = Math.max(1, Math.ceil(allMatches.length / ROW_COUNT));
     currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
 

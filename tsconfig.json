@@ -6,6 +6,7 @@
     "lib": ["ES2020"],
     "strict": true,
     "noEmit": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "types": ["@minecraft/server"]
   },

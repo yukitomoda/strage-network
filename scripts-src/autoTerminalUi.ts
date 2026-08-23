@@ -8,6 +8,7 @@ import {
   UIRawMessage,
 } from "@minecraft/server-ui";
 import { listActiveDeposits } from "./depositProcessing";
+import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
 import { locEquals, WishlistLine } from "./state";
@@ -32,7 +33,8 @@ function setupWishlistTab(
   dimension: Dimension,
   terminalLoc: Vector3,
   networkCatalog: CatalogEntry[],
-  initialWishlist: WishlistLine[]
+  initialWishlist: WishlistLine[],
+  locale: string
 ): void {
   let wishlist = [...initialWishlist];
 
@@ -75,8 +77,8 @@ function setupWishlistTab(
   }
 
   function refreshSearch(): void {
-    const q = searchText.getData().trim().toLowerCase();
-    const allMatches = networkCatalog.filter((entry) => entry.label.toLowerCase().includes(q));
+    const q = searchText.getData();
+    const allMatches = networkCatalog.filter((entry) => matchesSearchQuery(entry, q, locale));
     const totalPages = Math.max(1, Math.ceil(allMatches.length / ROW_COUNT));
     currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
 
@@ -297,7 +299,8 @@ export function showAutoTerminalUi(player: Player, block: Block): void {
     dimension,
     block.location,
     networkCatalog,
-    getWishlist(dimension, block.location)
+    getWishlist(dimension, block.location),
+    player.clientSystemInfo.locale
   );
 
   // 「状況」タブはterminalUi.tsのshowOrderUiと全く同じ実装(statusListUi.ts)を、この端末に

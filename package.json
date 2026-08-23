@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "build:icon": "node tools/generate-placeholder-icon.mjs",
+    "build:item-names": "node tools/generate-addon-item-names.mjs",
     "build:scripts": "esbuild scripts-src/main.ts --bundle --format=esm --target=es2020 --outfile=BP/scripts/main.js --external:@minecraft/server --external:@minecraft/server-ui",
-    "build": "npm run build:icon && npm run build:scripts",
+    "build": "npm run build:icon && npm run build:item-names && npm run build:scripts",
     "watch": "esbuild scripts-src/main.ts --bundle --format=esm --target=es2020 --outfile=BP/scripts/main.js --external:@minecraft/server --external:@minecraft/server-ui --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate:vanilla-item-names": "node tools/generate-vanilla-item-names.mjs"
   },
   "devDependencies": {
     "@minecraft/server": "^2.1.0",

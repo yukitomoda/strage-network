@@ -8,6 +8,7 @@ import {
   UIRawMessage,
 } from "@minecraft/server-ui";
 import { listActiveDeposits } from "./depositProcessing";
+import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
 import { locEquals, StockTargetLine } from "./state";
@@ -34,7 +35,8 @@ function setupStockTargetTab(
   dimension: Dimension,
   terminalLoc: Vector3,
   networkCatalog: CatalogEntry[],
-  initialTargets: StockTargetLine[]
+  initialTargets: StockTargetLine[],
+  locale: string
 ): void {
   let targets = [...initialTargets];
 
@@ -77,8 +79,8 @@ function setupStockTargetTab(
   }
 
   function refreshSearch(): void {
-    const q = searchText.getData().trim().toLowerCase();
-    const allMatches = networkCatalog.filter((entry) => entry.label.toLowerCase().includes(q));
+    const q = searchText.getData();
+    const allMatches = networkCatalog.filter((entry) => matchesSearchQuery(entry, q, locale));
     const totalPages = Math.max(1, Math.ceil(allMatches.length / ROW_COUNT));
     currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
 
@@ -317,7 +319,8 @@ export function showInventoryTerminalUi(player: Player, block: Block): void {
     dimension,
     block.location,
     networkCatalog,
-    getStockTargets(dimension, block.location)
+    getStockTargets(dimension, block.location),
+    player.clientSystemInfo.locale
   );
 
   // 「状況」タブはterminalUi.ts/autoTerminalUi.tsと全く同じ実装(statusListUi.ts)を、

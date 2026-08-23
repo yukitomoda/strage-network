@@ -9,6 +9,7 @@ import {
 } from "@minecraft/server-ui";
 import { findMembership } from "./network";
 import { listActiveDeposits, submitDeposit } from "./depositProcessing";
+import { matchesSearchQuery } from "./itemIdentity";
 import { hasActiveDeliveryOrderFor, listActiveOrders, submitOrder } from "./orderProcessing";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
@@ -34,6 +35,7 @@ function setupTab(
   tabVisible: ObservableBoolean,
   catalog: CatalogEntry[],
   confirmLabel: string,
+  locale: string,
   // 戻り値はtrueなら送信成功(カートを空にしてフォームを閉じる)、falseなら拒否
   // (カート・フォームともそのまま保持し、プレイヤーが少し待って再度確定できるようにする)。
   onConfirm: (lines: CartLine[]) => boolean
@@ -69,8 +71,8 @@ function setupTab(
   }
 
   function refreshFilter(): void {
-    const q = searchText.getData().trim().toLowerCase();
-    const allMatches = catalog.filter((entry) => entry.label.toLowerCase().includes(q));
+    const q = searchText.getData();
+    const allMatches = catalog.filter((entry) => matchesSearchQuery(entry, q, locale));
     const totalPages = Math.max(1, Math.ceil(allMatches.length / ROW_COUNT));
     currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
 
@@ -325,7 +327,7 @@ export function showOrderUi(player: Player, block: Block): void {
     { label: "設定", value: 3 },
   ]);
 
-  setupTab(form, isOrderTab, orderCatalog, "確定", (lines) => {
+  setupTab(form, isOrderTab, orderCatalog, "確定", player.clientSystemInfo.locale, (lines) => {
     if (block.typeId === DELIVERY_TERMINAL_BLOCK_ID && hasActiveDeliveryOrderFor(player.name)) {
       player.sendMessage("§cあなたへの配達が既に進行中です。完了までお待ちください。");
       return false;

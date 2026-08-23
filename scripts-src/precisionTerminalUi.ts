@@ -8,6 +8,7 @@ import {
   UIRawMessage,
 } from "@minecraft/server-ui";
 import { listActiveDeposits } from "./depositProcessing";
+import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
 import { locEquals, PrecisionSlotLine } from "./state";
@@ -31,7 +32,8 @@ function setupSlotRuleTab(
   terminalLoc: Vector3,
   networkCatalog: CatalogEntry[],
   initialSlots: PrecisionSlotLine[],
-  attachedContainerSize: number | undefined
+  attachedContainerSize: number | undefined,
+  locale: string
 ): void {
   let slots = [...initialSlots];
 
@@ -91,8 +93,8 @@ function setupSlotRuleTab(
   }
 
   function refreshSearch(): void {
-    const q = searchText.getData().trim().toLowerCase();
-    const allMatches = networkCatalog.filter((entry) => entry.label.toLowerCase().includes(q));
+    const q = searchText.getData();
+    const allMatches = networkCatalog.filter((entry) => matchesSearchQuery(entry, q, locale));
     const totalPages = Math.max(1, Math.ceil(allMatches.length / ROW_COUNT));
     currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
 
@@ -151,6 +153,7 @@ function setupSlotRuleTab(
   });
 
   form.label("スロット番号を指定して、維持したいアイテムと数量を設定します。", { visible: tabVisible });
+  form.textField("検索", searchText, { visible: tabVisible });
   form.textField("スロット番号", slotNumberText, { visible: tabVisible });
   form.toggle("回収", collect, {
     visible: tabVisible,
@@ -322,7 +325,8 @@ export function showPrecisionTerminalUi(player: Player, block: Block): void {
     block.location,
     networkCatalog,
     getPrecisionSlots(dimension, block.location),
-    attachedContainerSize
+    attachedContainerSize,
+    player.clientSystemInfo.locale
   );
 
   const orderStatusRefreshTimer = setupOrderStatusSection(form, isStatusTab, dimension, player, network.id, () =>

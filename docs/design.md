@@ -489,6 +489,7 @@ UIフレームワークは `@minecraft/server-ui` の新しいリアクティブ
   - 補充と回収が同時に発火しないのは、補充が起こる条件(中身が目標と一致 かつ 不足)では余剰(現在数−目標)が必ず0以下になり、回収の対象にならないため。
 - **UI**(`precisionTerminalUi.ts`): 自動端末の`setupWishlistTab`とほぼ同じ構成(タブ: スロット設定/状況/設定)だが、以下の点が異なる。
   - スロット番号の指定が必要なため、検索欄の上に`textField`(テキスト入力)を1つ追加した。スロット番号は離散的な整数の指定であり「値の連続的な調整」に向くスライダーは適さないと判断し、`slider`ではなく`textField`にした。
+  - **(実機で発見された不具合の修正済み) 検索欄自体が表示されていなかった**: `searchText`という`ObservableString`は用意され`refreshSearch`の絞り込みにも使われていたが、他の3種のUI(自動端末/在庫管理ターミナル/オブザーバー)と違い、これを実際に画面へ出す`form.textField("検索", searchText, ...)`の呼び出し自体が無かった(検索ロジックはあるのに入力欄が存在しない、という実装漏れ)。ユーザー報告を受けて、スロット番号欄の直前に追加して解消した。
   - スロット番号の下に「回収」トグル(デフォルトON)を置く。検索結果をタップする、または最下部の「目標をなしに設定する」ボタンを押すと、その時点のスロット番号・回収トグルの状態で、現在入力されているスロット番号のエントリをその場で上書き設定する(1スロット1エントリのため、自動端末の「増やす/減らす」トグルは無い)。
   - 設定タブは名前欄のみ(回収可否はスロットごとの設定なので、自動端末のような「リスト外は預け入れ」というグローバルなトグルは無い)。
   - 状況タブは他の3種と同じく`statusListUi.ts`をこの端末に絞り込んで使う。`slotIndex`付きのラインは、ツールチップの品目名の前に「スロットN: 」を付けて表示する(`progressTooltip`の小さな拡張。他の3種のターミナルは`slotIndex`を持たないため表示は変わらない)。
@@ -806,3 +807,28 @@ mainブランチへのpushのたびに、自動でビルド・バージョン採
 - **進捗表示**(新規`deliveryProgress.ts`の`startDeliveryProgressLoop`): 全ネットワークの発行待ち+処理中の注文のうち搬入先が配達ターミナルのものを抽出し、該当プレイヤーへ集計進捗(注文内の全ラインの`delivered`/`requested`合計)を`player.onScreenDisplay.setActionBar`で表示する。1プレイヤー同時1件の制約により、この表示が複数の注文で競合することは無い。
   - **更新間隔は周期アップグレード軸の最速Tier(T4)に合わせる**(ユーザー指摘): `delivered`の値自体はコントローラの処理サイクル間隔(周期アップグレード軸のTierに応じて可変、`networkProcessing.ts`の`getCycleIntervalTicks`)より速くは変化しないため、それより短い間隔で表示を更新しても実際には値が変わっていない同じ数値を描き直すだけで無意味。`getCycleIntervalTicks(getAxisMaxTier(CONTROLLER_CYCLE_AXIS))`(=T4の間隔、現状10tick)を更新間隔に使うことで、無駄な更新を避けつつ実際に値が変わりうる最短間隔には確実に追従する。ハードコードせず軸定義から動的に導出しているため、将来周期軸のTier数や各Tierの間隔テーブルを調整しても自動的に追従する。
 - **完了表示**(`orderProcessing.ts`の`finalizeOrder`): 既存の完了通知(`wh:notify_on_complete`トグルが有効な場合の`player.sendMessage`)と同じ条件下で、配達ターミナル発の注文であればアクションバーにも完了(または一部不足)を表示する。専用の設定は増やさず既存のトグルに相乗りしている。進捗ループは注文がissuing/ordersから消えた後は対象にしないため、この完了表示を上書きしない。
+
+## 16. アイテム検索をクライアントロケールの表示名でもできるようにする
+
+引き出し/預け入れ/ウィッシュリスト等の検索(`entry.label`でのマッチング)は、カスタム名(`nameTag`)が無い限り生の`typeId`(例: `minecraft:diamond`)にしかマッチせず、プレイヤーが画面で見ている翻訳済みの名前(例: 「ダイヤモンド」)で検索できないという指摘を受けて改善した。
+
+### サーバー側は任意プレイヤーの翻訳済み文字列を本来知る手段を持たない
+
+`{translate: key}`(RawMessage)はクライアント側で解決される仕組みで、サーバースクリプトが特定プレイヤーの言語での実際の文字列を得る標準的な手段は無い。ただし`Player.clientSystemInfo.locale`(`@minecraft/server`)でプレイヤーのクライアントロケール自体(`"ja_JP"`等)は取得できる。そこで、**ロケールごとの`localizationKey -> 表示名`の対応表を静的データとしてこのアドオン自身が持ち、そのプレイヤーのロケールで引く**方式にした。
+
+### 対応表の生成: vanilla分とアドオン自身の分を分離
+
+- **vanilla分**(`scripts-src/vanillaItemNames.json`): Minecraft本体が実際に持つリソースパックのlangファイル(このマシンにインストール済みのMinecraft本体、`.../data/resource_packs/vanilla/texts/{en_US,ja_JP}.lang`)から、`^(item|tile|block)\.[^=]+\.name=(.*)$`にマッチする行(1localeあたり1891件)を抽出して生成する(`tools/generate-vanilla-item-names.mjs`)。**CI(GitHub Actions)にはMinecraft本体が無い**ため、このスクリプトは`npm run build`には組み込まず、開発者がローカルで手動実行して結果をコミットする運用にした(Minecraftのアップデートで新アイテムが増えた時などに再実行する)。
+- **アドオン自身の分**(`scripts-src/addonItemNames.json`): 当初はこちらもvanilla分と同じ「事前生成してコミット」方式にする案だったが、**このアドオンに新しいアイテムを追加するたびに生成コマンドを手動で再実行し忘れると、その新アイテムだけ検索できないまま古びる**という指摘を受けて設計変更した。アドオン自身の`RP/texts/{en_US,ja_JP}.lang`はMinecraft本体を必要とせずリポジトリ内だけで完結するため、`tools/generate-addon-item-names.mjs`を**`npm run build`のたびに毎回実行するステップ**(`build:item-names`)にし、常に最新の状態を保証している(CIでも問題なく動く)。
+  - **正規表現がvanilla分と異なる**: このアドオンのlangファイルは、ブロック(block_placerアイテム含む)は`tile.wh:xxx.name`(vanillaと同じ、`.name`接尾辞あり)だが、純粋なアイテムは`item.wh:xxx`(`.name`接尾辞なし、`BP/items/*.json`の`minecraft:display_name.value`と実際に一致させている)という2つの命名規則が混在している。素朴に「`item.`/`tile.`で始まる行」を全部拾うと、`item.wh:wrench.desc.1`のような説明文キーまで誤って対応表に入ってしまうため、識別子の直後にさらにドット区切りが続かない形(`tile\.wh:[a-z0-9_]+\.name`または`item\.wh:[a-z0-9_]+`)だけを対象にする専用の正規表現にした。
+- **`scripts-src/addonItemNames.json`はビルドのたびに再生成されるが、コミットは必要**: `itemIdentity.ts`がこのファイルを`import`するため、`npm run typecheck`はビルド実行前でもこのファイルの存在を要求する(`resolveJsonModule`を`tsconfig.json`に追加した)。CIも`typecheck`→`build`の順で走る(`.github/workflows/release.yml`)ため、生成物であっても`BP/scripts/main.js`のような出力専用ファイルとは扱いが異なり、コミットが必須になる。
+
+### 検索ロジック(`scripts-src/itemIdentity.ts`の`matchesSearchQuery`)
+
+既存の`label`一致(typeId/カスタム名)に加えて、`vanillaItemNames.json`/`addonItemNames.json`から検索プレイヤーのロケールでの表示名を引き、そちらにもマッチすればヒットとする(OR条件)。カスタム名が付いていても、素の(隠れた)アイテム名でも検索できる。対応する言語データが無いロケール(現状en_US/ja_JP以外)や、**他アドオン(サードパーティ)のアイテム**(Script APIには他のリソースパックのlangファイルを実行時に読む手段が無いため、この対応表には含まれない)は、従来通り`label`一致のみへ自動的にフォールバックする(検索の裾野が狭まるだけで壊れない)。
+
+引き出し/預け入れ(`terminalUi.ts`)・ウィッシュリスト(`autoTerminalUi.ts`)・在庫目標(`inventoryTerminalUi.ts`)・スロット設定(`precisionTerminalUi.ts`)・オブザーバー設定(`observerUi.ts`)の5箇所すべての検索処理を、`entry.label.toLowerCase().includes(q)`から`matchesSearchQuery(entry, q, locale)`に置き換えた。`locale`は各UIの入口(`showXxxUi(player, block)`)が持つ`player.clientSystemInfo.locale`を、検索を行う内部関数へ新しい引数として渡している。
+
+### スクリプトバンドルのサイズへの影響
+
+vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、esbuildバンドルに直接importして組み込んでいる(`BP/scripts/main.js`は約157KBから約408KBに増えた)。個人利用アドオンの規模では実用上問題にならないと判断した。
