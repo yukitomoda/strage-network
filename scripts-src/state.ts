@@ -185,6 +185,10 @@ export function generatePrecisionTerminalName(): string {
   return `PRC-${generateShortCode()}`;
 }
 
+export function generateDeliveryTerminalName(): string {
+  return `DLV-${generateShortCode()}`;
+}
+
 export function locEquals(a: Vector3, b: Vector3): boolean {
   return a.x === b.x && a.y === b.y && a.z === b.z;
 }

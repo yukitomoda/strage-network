@@ -59,8 +59,14 @@ function setNetworkIds(ids: string[]): void {
   writeJson(NETWORK_IDS_KEY, ids);
 }
 
+// オブザーバー機能を追加する前に作られたネットワークは、永続化データに`observers`が
+// 存在しない(undefined)。そのまま返すと`network.observers.some(...)`等が例外を投げ、
+// findMembership(全ネットワークを走査する)経由でレンチのあらゆる接続操作が無反応になる
+// 不具合が実機で見つかった。読み込み時に正規化し、以後の書き戻しで自然に補完されるようにする。
 export function getNetwork(id: string): NetworkData | undefined {
-  return readJson<NetworkData>(networkKey(id));
+  const network = readJson<NetworkData>(networkKey(id));
+  if (network && !network.observers) network.observers = [];
+  return network;
 }
 
 function setNetwork(network: NetworkData): void {
@@ -338,6 +344,13 @@ export function setOrderCancels(networkId: string, requestIds: string[]): void {
   writeJson(orderCancelsKey(networkId), requestIds);
 }
 
+// 「不足」記録は現状どのUIからも読み出されていない(将来のUI表示のための記録、8/9章参照)が、
+// 上限なくpushし続けると動的プロパティの1件あたり文字数上限(32767)をいずれ超えて例外になる
+// (実機で発見。自動端末等の定期チェックが慢性的な品薄品目に対して5秒おきに新しい引き出しを
+// 発行し続けると、finalizeOrderのたびに際限なく積み上がる)。直近PARTIAL_HISTORY_LIMIT件だけ
+// 保持するローリングウィンドウにして上限を防ぐ。
+const PARTIAL_HISTORY_LIMIT = 20;
+
 export function getPartial(networkId: string): PartialResult[] {
   return readJson<PartialResult[]>(partialKey(networkId)) ?? [];
 }
@@ -345,7 +358,7 @@ export function getPartial(networkId: string): PartialResult[] {
 export function appendPartial(networkId: string, result: PartialResult): void {
   const results = getPartial(networkId);
   results.push(result);
-  writeJson(partialKey(networkId), results);
+  writeJson(partialKey(networkId), results.slice(-PARTIAL_HISTORY_LIMIT));
 }
 
 export function getDeposits(networkId: string): DepositRequest[] {
@@ -380,7 +393,7 @@ export function getDepositPartial(networkId: string): DepositPartialResult[] {
 export function appendDepositPartial(networkId: string, result: DepositPartialResult): void {
   const results = getDepositPartial(networkId);
   results.push(result);
-  writeJson(depositPartialKey(networkId), results);
+  writeJson(depositPartialKey(networkId), results.slice(-PARTIAL_HISTORY_LIMIT));
 }
 
 // 整理リクエストは同時に1件まで(ボタン連打で重複キューイングしないよう submitOrganize 側で

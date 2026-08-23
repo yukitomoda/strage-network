@@ -3,6 +3,7 @@ tile.wh:terminal.name=Warehouse Terminal
 tile.wh:auto_terminal.name=Auto Terminal
 tile.wh:inventory_terminal.name=Inventory Terminal
 tile.wh:precision_terminal.name=Precision Terminal
+tile.wh:delivery_terminal.name=Delivery Terminal
 tile.wh:network_observer.name=Network Observer
 item.wh:wrench=Warehouse Wrench
 item.wh:test_filler=[Test] Random Filler
@@ -44,6 +45,7 @@ item.wh:terminal.desc.1=§7§oA terminal for moving items between a storage and 
 item.wh:auto_terminal.desc.1=§7§oA terminal that periodically exchanges items with the network so the storage's contents approach a target.
 item.wh:inventory_terminal.desc.1=§7§oA terminal that periodically exchanges items with storage so the network's stock approaches a target.
 item.wh:precision_terminal.desc.1=§7§oA terminal that maintains a target item in a specific slot of the storage, and can collect the contents of any other slot.
+item.wh:delivery_terminal.desc.1=§7§oWhen a withdrawal is delivered, it goes straight into the ordering player's inventory. If offline, it goes to the storage instead.
 item.wh:terminal_family.desc.usage=§7Place it on a storage and connect it to a network to use it.
 
 item.wh:network_observer.desc.1=§7§oOutputs a redstone signal based on the network's item counts.

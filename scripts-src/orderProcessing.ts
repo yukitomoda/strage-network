@@ -1,6 +1,7 @@
 import { Dimension, system, Vector3, world } from "@minecraft/server";
 import {
   appendPartial,
+  getAllNetworks,
   getIssuing,
   getOrderCancels,
   getOrders,
@@ -10,7 +11,7 @@ import {
 } from "./network";
 import { extractFromStorages, extractFromStoragesIntoSlot } from "./storageScan";
 import { generateId, generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
-import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
+import { getAttachedStorageLocation, isTerminalLikeBlock, DELIVERY_TERMINAL_BLOCK_ID } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
 import { CONTROLLER_SPEED_AXIS } from "./controllerAxes";
 import { getAxisTier } from "./upgrade";
@@ -40,6 +41,23 @@ export function submitOrder(networkId: string, terminalLoc: Vector3, playerName:
 // 合わせた「まだ完了していない引き出し」一覧。hasPendingOrderForと同じ「両方見る」考え方。
 export function listActiveOrders(networkId: string): Order[] {
   return [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
+}
+
+// 配達ターミナルは1プレイヤーにつき同時に1件までしか配達できない制約(ネットワーク横断)。
+// アクションバーで進捗を表示する都合上、同じプレイヤー宛の配達が複数同時進行すると
+// どちらの進捗を出すべきか一意に決められないための制約(docs/design.md参照)。
+// 「issuing/ordersに存在する」こと自体が「まだfinalizeOrderされていない=未完了」を意味する
+// (全ラインが配送済みor不足確定になった時点でfinalizeOrderされキューから除去されるため)。
+export function hasActiveDeliveryOrderFor(playerName: string): boolean {
+  for (const network of getAllNetworks()) {
+    const dimension = world.getDimension(network.dimensionId);
+    const activeOrders = [...getIssuing(network.id).map((entry) => entry.order), ...getOrders(network.id)];
+    for (const order of activeOrders) {
+      if (order.playerName !== playerName) continue;
+      if (dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) return true;
+    }
+  }
+  return false;
 }
 
 // 直前のチェックで出した引き出しがまだ処理中(発行待ち含む)なら、同じ品目を二重に引き出し
@@ -147,7 +165,18 @@ export function processNetworkOrders(network: NetworkData): boolean {
 
     // 搬入先はターミナルが張り付いている面(wh:facing)の先のブロック。毎回動的に見る。
     const attachedLoc = getAttachedStorageLocation(terminalBlock);
-    const destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+    let destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+
+    // 配達ターミナル: 注文したプレイヤーがオンラインなら、位置に関わらずインベントリへ優先的に
+    // 届ける(右クリックしないと注文できない=注文した時点で必ず正面にいたことが保証されているため、
+    // 配送時点の位置判定は行わない、という設計判断。docs/design.md参照)。オフラインなら従来通り
+    // 張り付いた先のストレージへ(=通常のターミナルと同じ基本動作)。
+    if (terminalBlock.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+      const orderingPlayer = world.getPlayers().find((p) => p.name === order.playerName);
+      const playerContainer = orderingPlayer?.getComponent("inventory")?.container;
+      if (playerContainer) destContainer = playerContainer;
+    }
+
     if (!destContainer) {
       // 張り付いた先にコンテナが無い: 全ラインが不足として記録される
       finalizeOrder(network, dimension, order);
@@ -230,4 +259,12 @@ function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order)
       ? `§e${namePrefix}引き出し #${order.id} の受け取り準備ができました(一部搬送できなかった品があります)。`
       : `§b${namePrefix}引き出し #${order.id} の受け取り準備ができました。`
   );
+
+  // 配達ターミナルはチャットのメッセージが見落とされやすいという指摘を受け、アクションバーにも
+  // 完了を表示する(進捗表示と同じ通知トグルに乗せ、専用の設定は増やさない)。
+  if (dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+    player.onScreenDisplay.setActionBar(
+      shortfall.length > 0 ? "§e配達完了(一部不足があります)" : "§a配達完了!"
+    );
+  }
 }

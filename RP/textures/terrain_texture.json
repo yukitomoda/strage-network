@@ -17,6 +17,9 @@
     "wh:precision_terminal": {
       "textures": "textures/blocks/precision_terminal"
     },
+    "wh:delivery_terminal": {
+      "textures": "textures/blocks/delivery_terminal"
+    },
     "wh:network_observer": {
       "textures": "textures/blocks/network_observer"
     }

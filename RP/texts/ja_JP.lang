@@ -3,6 +3,7 @@ tile.wh:terminal.name=倉庫ターミナル
 tile.wh:auto_terminal.name=自動ターミナル
 tile.wh:inventory_terminal.name=在庫管理ターミナル
 tile.wh:precision_terminal.name=精密ターミナル
+tile.wh:delivery_terminal.name=配達ターミナル
 tile.wh:network_observer.name=ネットワークオブザーバー
 item.wh:wrench=倉庫レンチ
 item.wh:test_filler=[テスト用] ランダム充填ツール
@@ -44,6 +45,7 @@ item.wh:terminal.desc.1=§7§oストレージとネットワークのアイテ�
 item.wh:auto_terminal.desc.1=§7§oストレージの内容が目標に近づくように、定期的にネットワークとアイテムを出し入れする端末。
 item.wh:inventory_terminal.desc.1=§7§oネットワークの在庫が目標に近づくように、定期的にストレージとアイテムを出し入れする端末。
 item.wh:precision_terminal.desc.1=§7§oストレージの指定スロットに目標のアイテムを維持し、それ以外のスロットの中身を回収できる端末。
+item.wh:delivery_terminal.desc.1=§7§o引き出しを行うと、注文したプレイヤーのインベントリへ優先的に直接届ける端末。オフラインの場合はストレージへ届く。
 item.wh:terminal_family.desc.usage=§7ストレージに設置し、ネットワークに接続して使用します。
 
 item.wh:network_observer.desc.1=§7§oネットワークの在庫数に応じてレッドストーン信号を発するブロック。

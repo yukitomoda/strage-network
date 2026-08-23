@@ -236,6 +236,9 @@ const inventoryTerminalColorAt = terminalFamilyColorAt([200, 165, 245], [80, 55,
 // 精密ターミナル: 同じ構図だが、スクリーンが赤系で他の3種と見分けが付く(「精密/照準」のイメージ)
 const precisionTerminalColorAt = terminalFamilyColorAt([250, 140, 140], [110, 30, 30]);
 
+// 配達ターミナル: 同じ構図だが、スクリーンが緑系で他の4種と見分けが付く(「受け取り完了」のイメージ)
+const deliveryTerminalColorAt = terminalFamilyColorAt([140, 230, 150], [30, 110, 45]);
+
 // インベントリ等で使う、正面から見た単純な2Dアイコン(ブロックの3Dモデル用テクスチャとは
 // 別ファイル)。手に持った時やクリエイティブインベントリの見た目はこちらが使われるように
 // 各ブロックのBP側で`minecraft:icon`として登録する。3Dモデル側のBox UVテクスチャ
@@ -266,6 +269,7 @@ const terminalIconColorAt = flatTerminalIconColorAt([170, 235, 210], [40, 95, 80
 const autoTerminalIconColorAt = flatTerminalIconColorAt([255, 195, 120], [130, 80, 20]);
 const inventoryTerminalIconColorAt = flatTerminalIconColorAt([200, 165, 245], [80, 55, 120]);
 const precisionTerminalIconColorAt = flatTerminalIconColorAt([250, 140, 140], [110, 30, 30]);
+const deliveryTerminalIconColorAt = flatTerminalIconColorAt([140, 230, 150], [30, 110, 45]);
 
 // アップグレードキットアイテム: 透過背景に単純な菱形(宝石風)アイコン。Tierごとの色味だけで
 // 見分ける(素材(銅/鉄/ダイヤ/ネザライト)には対応させず、Tier番号のみの汎用ネーミングにした。
@@ -413,11 +417,13 @@ writePng("RP/textures/blocks/terminal.png", 32, terminalColorAt);
 writePng("RP/textures/blocks/auto_terminal.png", 32, autoTerminalColorAt);
 writePng("RP/textures/blocks/inventory_terminal.png", 32, inventoryTerminalColorAt);
 writePng("RP/textures/blocks/precision_terminal.png", 32, precisionTerminalColorAt);
+writePng("RP/textures/blocks/delivery_terminal.png", 32, deliveryTerminalColorAt);
 writePng("RP/textures/blocks/network_observer.png", NETWORK_OBSERVER_CANVAS_SIZE, networkObserverColorAt);
 writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
 writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);
 writePng("RP/textures/blocks/precision_terminal_icon.png", 16, precisionTerminalIconColorAt);
+writePng("RP/textures/blocks/delivery_terminal_icon.png", 16, deliveryTerminalIconColorAt);
 writePng("RP/textures/blocks/network_observer_icon.png", 16, networkObserverIconColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
 speedKitColorAtByTier.forEach((colorAt, i) => {

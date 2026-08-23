@@ -9,10 +9,10 @@ import {
 } from "@minecraft/server-ui";
 import { findMembership } from "./network";
 import { listActiveDeposits, submitDeposit } from "./depositProcessing";
-import { listActiveOrders, submitOrder } from "./orderProcessing";
+import { hasActiveDeliveryOrderFor, listActiveOrders, submitOrder } from "./orderProcessing";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
-import { getAttachedStorageLocation } from "./terminalBlock";
+import { DELIVERY_TERMINAL_BLOCK_ID, getAttachedStorageLocation } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName, setNotifyOnComplete, setTerminalName } from "./terminalSettings";
 import { DepositLine, locEquals } from "./state";
 
@@ -34,7 +34,9 @@ function setupTab(
   tabVisible: ObservableBoolean,
   catalog: CatalogEntry[],
   confirmLabel: string,
-  onConfirm: (lines: CartLine[]) => void
+  // 戻り値はtrueなら送信成功(カートを空にしてフォームを閉じる)、falseなら拒否
+  // (カート・フォームともそのまま保持し、プレイヤーが少し待って再度確定できるようにする)。
+  onConfirm: (lines: CartLine[]) => boolean
 ): void {
   const cart: CartLine[] = [];
   const searchText = new ObservableString("", { clientWritable: true });
@@ -178,9 +180,11 @@ function setupTab(
     confirmLabel,
     () => {
       if (cart.length === 0) return;
-      onConfirm(cart.map((l) => ({ ...l })));
-      cart.length = 0;
-      form.close();
+      const success = onConfirm(cart.map((l) => ({ ...l })));
+      if (success) {
+        cart.length = 0;
+        form.close();
+      }
     },
     { visible: tabVisible }
   );
@@ -322,8 +326,13 @@ export function showOrderUi(player: Player, block: Block): void {
   ]);
 
   setupTab(form, isOrderTab, orderCatalog, "確定", (lines) => {
+    if (block.typeId === DELIVERY_TERMINAL_BLOCK_ID && hasActiveDeliveryOrderFor(player.name)) {
+      player.sendMessage("§cあなたへの配達が既に進行中です。完了までお待ちください。");
+      return false;
+    }
     const orderId = submitOrder(network.id, block.location, player.name, lines);
     player.sendMessage(`§b${namePrefix}引き出し #${orderId} をネットワークへ送信しました。`);
+    return true;
   });
 
   setupDepositTab(form, player, isDepositTab, attachedContainer, network.id, block.location);

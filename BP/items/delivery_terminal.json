@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.100",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:delivery_terminal",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_delivery_terminal_icon",
+      "minecraft:block_placer": {
+        "block": "wh:delivery_terminal"
+      },
+      "minecraft:display_name": {
+        "value": "tile.wh:delivery_terminal.name"
+      }
+    }
+  }
+}
