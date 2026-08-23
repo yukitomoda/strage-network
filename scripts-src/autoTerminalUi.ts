@@ -122,9 +122,9 @@ function setupWishlistTab(
   });
 
   form.label("設定した数量を維持するように自動で引き出しします。", { visible: tabVisible });
-  form.textField("検索", searchText, { visible: tabVisible });
   form.slider("維持したい数量", targetAmount, 1, 64, { step: 1, visible: tabVisible });
   form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible });
+  form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果", { visible: tabVisible });
 

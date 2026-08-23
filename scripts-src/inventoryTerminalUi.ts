@@ -126,12 +126,12 @@ function setupStockTargetTab(
     "指定した在庫数を維持するように自動で引き出し・預け入れを行います。",
     { visible: tabVisible }
   );
-  form.textField("検索", searchText, { visible: tabVisible });
+  form.slider("維持したい在庫数", targetAmount, 1, 64, { step: 1, visible: tabVisible, disabled: emptyMode });
   form.toggle("空に設定", emptyMode, {
     visible: tabVisible,
   });
-  form.slider("維持したい在庫数", targetAmount, 1, 64, { step: 1, visible: tabVisible, disabled: emptyMode });
   form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: emptyMode });
+  form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果", { visible: tabVisible });
 

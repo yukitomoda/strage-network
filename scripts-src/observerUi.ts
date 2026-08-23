@@ -116,8 +116,8 @@ export function showObserverUi(player: Player, block: Block): void {
     { label: "品目2", value: 1 },
   ], { visible: showTargetDropdown });
   form.divider({});
-  form.label("検索結果", {});
   form.textField("検索", searchText, {});
+  form.label("検索結果", {});
   form.label(pageLabel, { visible: showPageLabel });
 
   form.button(

@@ -44,14 +44,26 @@ function localizedNameOf(localizationKey: string, locale: string): string | unde
   );
 }
 
+// ひらがな/カタカナを区別せず検索できるように、比較前にカタカナをひらがなへ正規化する
+// (ユーザー要望)。全角カタカナ(U+30A1-U+30F6)とひらがな(U+3041-U+3096)はUnicode上
+// 0x60だけ離れているだけなので、単純な引き算で変換できる(長音記号「ー」等、対応する
+// ひらがなが無い文字はそのまま残る)。
+function normalizeKana(text: string): string {
+  return text.replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
+
+function normalizeForSearch(text: string): string {
+  return normalizeKana(text.toLowerCase());
+}
+
 export function matchesSearchQuery(
   entry: { label: string; localizationKey: string },
   query: string,
   locale: string
 ): boolean {
-  const q = query.trim().toLowerCase();
+  const q = normalizeForSearch(query.trim());
   if (q === "") return true;
-  if (entry.label.toLowerCase().includes(q)) return true;
+  if (normalizeForSearch(entry.label).includes(q)) return true;
   const localized = localizedNameOf(entry.localizationKey, locale);
-  return !!localized && localized.toLowerCase().includes(q);
+  return !!localized && normalizeForSearch(localized).includes(q);
 }

@@ -98,11 +98,11 @@ function setupTab(
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
 
-  form.textField("検索", searchText, { visible: tabVisible });
   form.slider("数量", quantity, 1, 64, { step: 1, visible: tabVisible });
   form.toggle(increaseModeLabel, increaseMode, {
     visible: tabVisible,
   });
+  form.textField("検索", searchText, { visible: tabVisible });
 
   // タブ非表示中はページャーボタンも隠す(rowVisibleFlagと同じ、AND合成が無いための対処)。
   tabVisible.subscribe((active) => {

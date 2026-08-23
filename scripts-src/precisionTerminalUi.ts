@@ -153,12 +153,12 @@ function setupSlotRuleTab(
   });
 
   form.label("スロット番号を指定して、維持したいアイテムと数量を設定します。", { visible: tabVisible });
-  form.textField("検索", searchText, { visible: tabVisible });
   form.textField("スロット番号", slotNumberText, { visible: tabVisible });
   form.toggle("回収", collect, {
     visible: tabVisible,
   });
   form.slider("維持したい数量", targetAmount, 1, 64, { step: 1, visible: tabVisible });
+  form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果(タップで指定スロットに設定)", { visible: tabVisible });
   form.label(pageLabel, { visible: showPageLabel });
