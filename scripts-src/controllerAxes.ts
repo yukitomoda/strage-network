@@ -41,7 +41,7 @@ export const CONTROLLER_CYCLE_AXIS: UpgradeAxis = {
 // tools/generate-placeholder-icon.mjsは関与しない。BP/entities/range_wall.json・
 // range_ceiling.jsonのcomponent_groupsのscale値にもこのテーブルと同じ計算結果((値+0.5)/8.5)が
 // 手動で複製されているため、値を変える場合は両方を更新する必要がある(docs/design.md参照)。
-const RANGE_TABLE = [3, 4, 6, 9, 16]; // index = tier
+const RANGE_TABLE = [4, 6, 9, 12, 16]; // index = tier
 
 export function getRangeForTier(tier: number): number {
   return RANGE_TABLE[tier] ?? RANGE_TABLE[0];

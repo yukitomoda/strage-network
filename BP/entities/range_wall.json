@@ -31,10 +31,10 @@
       }
     },
     "component_groups": {
-      "wh:range_tier0": { "minecraft:scale": { "value": 0.4118 } },
-      "wh:range_tier1": { "minecraft:scale": { "value": 0.5294 } },
-      "wh:range_tier2": { "minecraft:scale": { "value": 0.7647 } },
-      "wh:range_tier3": { "minecraft:scale": { "value": 1.1176 } },
+      "wh:range_tier0": { "minecraft:scale": { "value": 0.5294 } },
+      "wh:range_tier1": { "minecraft:scale": { "value": 0.7647 } },
+      "wh:range_tier2": { "minecraft:scale": { "value": 1.1176 } },
+      "wh:range_tier3": { "minecraft:scale": { "value": 1.4706 } },
       "wh:range_tier4": { "minecraft:scale": { "value": 1.9412 } }
     },
     "events": {
