@@ -12,6 +12,7 @@ import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
 import { locEquals, WishlistLine } from "./state";
+import { setupQuantitySlider } from "./quantitySlider";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog } from "./storageScan";
 import {
@@ -39,7 +40,6 @@ function setupWishlistTab(
   let wishlist = [...initialWishlist];
 
   const searchText = new ObservableString("", { clientWritable: true });
-  const targetAmount = new ObservableNumber(1, { clientWritable: true });
   const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // ON: 増やす / OFF: 減らす
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
@@ -122,7 +122,7 @@ function setupWishlistTab(
   });
 
   form.label("設定した数量を維持するように自動で引き出しします。", { visible: tabVisible });
-  form.slider("維持したい数量", targetAmount, 1, 64, { step: 1, visible: tabVisible });
+  const targetAmount = setupQuantitySlider(form, "維持したい数量", tabVisible);
   form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible });
   form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });

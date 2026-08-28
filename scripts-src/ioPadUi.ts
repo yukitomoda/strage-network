@@ -12,6 +12,7 @@ import { displayKeyEquals, matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
 import { locEquals, PadMode, PadTargetLine } from "./state";
+import { setupQuantitySlider } from "./quantitySlider";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
 import { getPadMode, getPadTargets, getTerminalName, setPadMode, setPadTargets, setTerminalName } from "./terminalSettings";
@@ -65,7 +66,6 @@ function setupPadTargetTab(
   let targets = [...initialTargets];
 
   const searchText = new ObservableString("", { clientWritable: true });
-  const targetAmount = new ObservableNumber(1, { clientWritable: true });
   const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // ON: 増やす / OFF: 減らす
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
@@ -148,7 +148,7 @@ function setupPadTargetTab(
   });
 
   form.label("パッドの上に乗った時に維持したい所持数を設定します。", { visible: tabVisible });
-  form.slider("維持したい所持数", targetAmount, 1, 64, { step: 1, visible: tabVisible, disabled: emptyMode });
+  const targetAmount = setupQuantitySlider(form, "維持したい所持数", tabVisible, { disabled: emptyMode });
   form.toggle("空に設定", emptyMode, {
     visible: tabVisible,
   });

@@ -16,6 +16,7 @@ import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
 import { DELIVERY_TERMINAL_BLOCK_ID, getAttachedStorageLocation } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName, setNotifyOnComplete, setTerminalName } from "./terminalSettings";
 import { DepositLine, locEquals } from "./state";
+import { setupQuantitySlider } from "./quantitySlider";
 
 const ROW_COUNT = 8;
 
@@ -42,7 +43,6 @@ function setupTab(
 ): void {
   const cart: CartLine[] = [];
   const searchText = new ObservableString("", { clientWritable: true });
-  const quantity = new ObservableNumber(1, { clientWritable: true });
   const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // OFF: 増やす / ON: 減らす
 
   const rowLabels: ObservableUIRawMessage[] = [];
@@ -98,7 +98,7 @@ function setupTab(
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
 
-  form.slider("数量", quantity, 1, 64, { step: 1, visible: tabVisible });
+  const quantity = setupQuantitySlider(form, "数量", tabVisible);
   form.toggle(increaseModeLabel, increaseMode, {
     visible: tabVisible,
   });

@@ -12,6 +12,7 @@ import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
 import { locEquals, StockTargetLine } from "./state";
+import { setupQuantitySlider } from "./quantitySlider";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog } from "./storageScan";
 import {
@@ -41,7 +42,6 @@ function setupStockTargetTab(
   let targets = [...initialTargets];
 
   const searchText = new ObservableString("", { clientWritable: true });
-  const targetAmount = new ObservableNumber(1, { clientWritable: true });
   const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // ON: 増やす / OFF: 減らす
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
@@ -126,7 +126,7 @@ function setupStockTargetTab(
     "指定した在庫数を維持するように自動で引き出し・預け入れを行います。",
     { visible: tabVisible }
   );
-  form.slider("維持したい在庫数", targetAmount, 1, 64, { step: 1, visible: tabVisible, disabled: emptyMode });
+  const targetAmount = setupQuantitySlider(form, "維持したい在庫数", tabVisible, { disabled: emptyMode });
   form.toggle("空に設定", emptyMode, {
     visible: tabVisible,
   });

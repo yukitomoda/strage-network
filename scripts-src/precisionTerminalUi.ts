@@ -12,6 +12,7 @@ import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
 import { locEquals, PrecisionSlotLine } from "./state";
+import { setupQuantitySlider } from "./quantitySlider";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog } from "./storageScan";
 import { getAttachedStorageLocation } from "./terminalBlock";
@@ -38,7 +39,6 @@ function setupSlotRuleTab(
   let slots = [...initialSlots];
 
   const slotNumberText = new ObservableString("0", { clientWritable: true });
-  const targetAmount = new ObservableNumber(1, { clientWritable: true });
   // 「回収」: 目標外の品目・目標を超えた余剰分をネットワークへ回収するか。デフォルトON
   // (ユーザーからの要望。目標なしのスロットと組み合わせると、そのスロットは事実上
   // 常に回収される=旧来の「出力スロット」相当になる)。
@@ -157,7 +157,7 @@ function setupSlotRuleTab(
   form.toggle("回収", collect, {
     visible: tabVisible,
   });
-  form.slider("維持したい数量", targetAmount, 1, 64, { step: 1, visible: tabVisible });
+  const targetAmount = setupQuantitySlider(form, "維持したい数量", tabVisible);
   form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果(タップで指定スロットに設定)", { visible: tabVisible });
