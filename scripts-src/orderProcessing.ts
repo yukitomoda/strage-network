@@ -11,7 +11,12 @@ import {
 } from "./network";
 import { extractFromStorages, extractFromStoragesIntoSlot } from "./storageScan";
 import { generateId, generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
-import { getAttachedStorageLocation, isTerminalLikeBlock, DELIVERY_TERMINAL_BLOCK_ID } from "./terminalBlock";
+import {
+  getAttachedStorageLocation,
+  isTerminalLikeBlock,
+  DELIVERY_TERMINAL_BLOCK_ID,
+  IO_PAD_BLOCK_ID,
+} from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
 import { CONTROLLER_SPEED_AXIS } from "./controllerAxes";
 import { getAxisTier } from "./upgrade";
@@ -164,17 +169,28 @@ export function processNetworkOrders(network: NetworkData): boolean {
     }
 
     // 搬入先はターミナルが張り付いている面(wh:facing)の先のブロック。毎回動的に見る。
-    const attachedLoc = getAttachedStorageLocation(terminalBlock);
-    let destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+    let destContainer;
+    if (terminalBlock.typeId === IO_PAD_BLOCK_ID) {
+      // 搬入出パッド: 張り付いた先という概念が無く、パッドの上に乗っているプレイヤー
+      // (padCheck.tsが発注時にorder.playerNameへ入れている)のインベントリが搬入先になる。
+      // 配達ターミナルと違い代替の搬入先が無いため、そのプレイヤーが見つからなければ
+      // (ログアウト・パッドから離れた等)destContainerはundefinedのままになり、下の
+      // if(!destContainer)の「搬入先が無い」処理(shortfallとして確定)にそのまま乗る。
+      const targetPlayer = world.getPlayers().find((p) => p.name === order.playerName);
+      destContainer = targetPlayer?.getComponent("inventory")?.container;
+    } else {
+      const attachedLoc = getAttachedStorageLocation(terminalBlock);
+      destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
 
-    // 配達ターミナル: 注文したプレイヤーがオンラインなら、位置に関わらずインベントリへ優先的に
-    // 届ける(右クリックしないと注文できない=注文した時点で必ず正面にいたことが保証されているため、
-    // 配送時点の位置判定は行わない、という設計判断。docs/design.md参照)。オフラインなら従来通り
-    // 張り付いた先のストレージへ(=通常のターミナルと同じ基本動作)。
-    if (terminalBlock.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
-      const orderingPlayer = world.getPlayers().find((p) => p.name === order.playerName);
-      const playerContainer = orderingPlayer?.getComponent("inventory")?.container;
-      if (playerContainer) destContainer = playerContainer;
+      // 配達ターミナル: 注文したプレイヤーがオンラインなら、位置に関わらずインベントリへ優先的に
+      // 届ける(右クリックしないと注文できない=注文した時点で必ず正面にいたことが保証されているため、
+      // 配送時点の位置判定は行わない、という設計判断。docs/design.md参照)。オフラインなら従来通り
+      // 張り付いた先のストレージへ(=通常のターミナルと同じ基本動作)。
+      if (terminalBlock.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+        const orderingPlayer = world.getPlayers().find((p) => p.name === order.playerName);
+        const playerContainer = orderingPlayer?.getComponent("inventory")?.container;
+        if (playerContainer) destContainer = playerContainer;
+      }
     }
 
     if (!destContainer) {
@@ -261,10 +277,16 @@ function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order)
   );
 
   // 配達ターミナルはチャットのメッセージが見落とされやすいという指摘を受け、アクションバーにも
-  // 完了を表示する(進捗表示と同じ通知トグルに乗せ、専用の設定は増やさない)。
-  if (dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+  // 完了を表示する(進捗表示と同じ通知トグルに乗せ、専用の設定は増やさない)。搬入出パッドも
+  // ioPadProgress.tsの進捗表示に続けて完了を表示する(ユーザー要望)。
+  const terminalTypeId = dimension.getBlock(order.terminal)?.typeId;
+  if (terminalTypeId === DELIVERY_TERMINAL_BLOCK_ID) {
     player.onScreenDisplay.setActionBar(
       shortfall.length > 0 ? "§e配達完了(一部不足があります)" : "§a配達完了!"
+    );
+  } else if (terminalTypeId === IO_PAD_BLOCK_ID) {
+    player.onScreenDisplay.setActionBar(
+      shortfall.length > 0 ? "§e搬出完了(一部不足があります)" : "§a搬出完了!"
     );
   }
 }

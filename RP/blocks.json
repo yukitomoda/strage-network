@@ -11,5 +11,8 @@
   },
   "wh:inventory_terminal": {
     "sound": "wood"
+  },
+  "wh:io_pad": {
+    "sound": "stone"
   }
 }

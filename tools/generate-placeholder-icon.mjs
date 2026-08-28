@@ -77,6 +77,33 @@ function controllerColorAt(u, v) {
   return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
 }
 
+// 搬入出パッド: フルブロック単一テクスチャ(controllerColorAtと同じ構図)。中央に「搬入(内側の
+// シアンのリング)」「搬出(外側のピンクのリング)」を表す二重の同心リングを乗せ、他の端末系
+// (画面+走査線)とは違う、床置きの「乗るパッド」であることが一目で分かる見た目にした。
+// アイテム側の見た目もこのブロックテクスチャがそのまま使われる(controllerと同じくフルブロックの
+// ため、専用アイコン・アイテム定義は不要。BP/blocks/io_pad.json参照)。
+function ioPadColorAt(u, v) {
+  const bevel = edgeBevel(u, v, 0.09);
+  let [r, g, b] = [42, 40, 46];
+  if (bevel === 1) [r, g, b] = [r + 22, g + 22, b + 22];
+  else if (bevel === -1) [r, g, b] = [r - 18, g - 18, b - 18];
+
+  const nearCornerU = Math.abs(u - 0.14) < 0.035 || Math.abs(u - 0.86) < 0.035;
+  const nearCornerV = Math.abs(v - 0.14) < 0.035 || Math.abs(v - 0.86) < 0.035;
+  if (nearCornerU && nearCornerV) [r, g, b] = [22, 20, 24];
+
+  // 当初は彩度・明度が高いピンク/シアンにしていたが、他のターミナル系(暗い金属フレームに
+  // 中程度の彩度の色を乗せる程度)と比べて浮いて見える(実機で指摘)ため、彩度・明度を
+  // 落とした落ち着いた色調(くすんだローズ/スレートティール)に変更した。
+  const dist = Math.hypot(u - 0.5, v - 0.5);
+  if (dist < 0.4 && dist > 0.3) [r, g, b] = [150, 108, 118]; // 外側リング(搬出)
+  if (dist < 0.22 && dist > 0.12) [r, g, b] = [96, 132, 138]; // 内側リング(搬入)
+  if (dist < 0.08) [r, g, b] = [188, 186, 188];
+
+  const n = (hashNoise(u, v) - 0.5) * 6;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
 // インベントリ等で使う正面からの単純な2Dアイコン(controllerColorAtの構図を16x16へ縮めたもの)。
 function networkObserverIconColorAt(u, v) {
   const bevel = edgeBevel(u, v, 0.1);
@@ -419,6 +446,7 @@ writePng("RP/textures/blocks/inventory_terminal.png", 32, inventoryTerminalColor
 writePng("RP/textures/blocks/precision_terminal.png", 32, precisionTerminalColorAt);
 writePng("RP/textures/blocks/delivery_terminal.png", 32, deliveryTerminalColorAt);
 writePng("RP/textures/blocks/network_observer.png", NETWORK_OBSERVER_CANVAS_SIZE, networkObserverColorAt);
+writePng("RP/textures/blocks/io_pad.png", 32, ioPadColorAt);
 writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
 writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);

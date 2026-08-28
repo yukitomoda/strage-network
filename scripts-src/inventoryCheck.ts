@@ -1,30 +1,22 @@
-import { Block, system, Vector3, world } from "@minecraft/server";
+import { Block, Dimension, Vector3 } from "@minecraft/server";
 import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
-import { getAllNetworks } from "./network";
+import { startCycleAlignedLoop } from "./networkProcessing";
 import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { DepositLine, NetworkData, OrderLine, StockTargetLine } from "./state";
 import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
 import { getAttachedStorageLocation, INVENTORY_TERMINAL_BLOCK_ID, isRedstoneLocked } from "./terminalBlock";
 import { getInventoryAutoDeposit, getStockTargets } from "./terminalSettings";
 
-// MVP: 固定値(5秒)。自動端末(autoOrderCheck.ts)と同じ考え方。
-// docs/design.md 4章「スループット制」参照。
-const INVENTORY_CHECK_INTERVAL_TICKS = 100;
-
 // 自動発注・自動預け入れと同じダミー値(autoOrderCheck.tsのAUTO_ORDER_PLAYER_NAME参照)。
 const AUTO_ORDER_PLAYER_NAME = "";
 
+// networkProcessing.tsのstartCycleAlignedLoop参照: 以前は固定100tick(5秒)間隔だったが、
+// コントローラの周期短縮キットのTierに応じたサイクル間隔に検知頻度も追従するようにした。
 export function startInventoryTerminalCheckLoop(): void {
-  system.runInterval(() => {
-    for (const network of getAllNetworks()) {
-      checkNetworkInventoryTerminals(network);
-    }
-  }, INVENTORY_CHECK_INTERVAL_TICKS);
+  startCycleAlignedLoop(checkNetworkInventoryTerminals);
 }
 
-function checkNetworkInventoryTerminals(network: NetworkData): void {
-  const dimension = world.getDimension(network.dimensionId);
-
+function checkNetworkInventoryTerminals(network: NetworkData, dimension: Dimension): void {
   const inventoryTerminals: { loc: Vector3; block: Block }[] = [];
   for (const loc of network.terminals) {
     const block = dimension.getBlock(loc);

@@ -1,32 +1,24 @@
-import { system, Vector3, world } from "@minecraft/server";
+import { Dimension, Vector3 } from "@minecraft/server";
 import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
-import { getAllNetworks } from "./network";
+import { startCycleAlignedLoop } from "./networkProcessing";
 import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { CatalogEntry, scanContainerCatalog } from "./storageScan";
 import { AUTO_TERMINAL_BLOCK_ID, getAttachedStorageLocation, isRedstoneLocked } from "./terminalBlock";
 import { getAutoDeposit, getWishlist } from "./terminalSettings";
 import { DepositLine, NetworkData, OrderLine, WishlistLine } from "./state";
 
-// MVP: 固定値(5秒)。将来はコントローラ/ターミナルのグレードに応じて可変にする。
-// docs/design.md 4章「スループット制」と同様の考え方。
-const AUTO_CHECK_INTERVAL_TICKS = 100;
-
 // 自動発注・自動預け入れには送信元プレイヤーが存在しないため、空文字列にしておく
 // (引き出しの完了通知は既定でOFFだが、後からONにしても通知先が見つからず実害が無いように。
 // コントローラUIの「状況」タブでも、空文字列は「自動」として表示される)。
 const AUTO_ORDER_PLAYER_NAME = "";
 
+// networkProcessing.tsのstartCycleAlignedLoop参照: 以前は固定100tick(5秒)間隔だったが、
+// コントローラの周期短縮キットのTierに応じたサイクル間隔に検知頻度も追従するようにした。
 export function startAutoTerminalCheckLoop(): void {
-  system.runInterval(() => {
-    for (const network of getAllNetworks()) {
-      checkNetworkAutoTerminals(network);
-    }
-  }, AUTO_CHECK_INTERVAL_TICKS);
+  startCycleAlignedLoop(checkNetworkAutoTerminals);
 }
 
-function checkNetworkAutoTerminals(network: NetworkData): void {
-  const dimension = world.getDimension(network.dimensionId);
-
+function checkNetworkAutoTerminals(network: NetworkData, dimension: Dimension): void {
   for (const terminalLoc of network.terminals) {
     const block = dimension.getBlock(terminalLoc);
     if (!block?.isValid || block.typeId !== AUTO_TERMINAL_BLOCK_ID) continue;

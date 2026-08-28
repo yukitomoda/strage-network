@@ -113,6 +113,19 @@ export type PrecisionSlotLine = {
   collect: boolean; // 目標外/余剰分をネットワークへ回収するか
 };
 
+// 搬入出パッドの「プレイヤーがパッドの上に乗った時に維持したい所持数」リスト。
+// terminalSettings.ts(非表示エンティティ)に保存する。WishlistLine/StockTargetLineと
+// 形は同じだが対象が違う(プレイヤーの所持数)ため、混同を避けて別の型にしている。
+export type PadTargetLine = {
+  itemTypeId: string;
+  itemName?: string;
+  targetAmount: number;
+};
+
+// 搬入出パッドの動作モード。「搬入出」は目標超過分の預け入れ・目標未達分の引き出しの
+// 両方を行い、「搬入のみ」「搬出のみ」はそれぞれ片方の方向にしか動かさない(padCheck.ts参照)。
+export type PadMode = "both" | "deposit_only" | "withdraw_only";
+
 // ネットワークオブザーバーの設定。在庫モード(itemTypeId+maxAmount)/比較モード
 // (itemTypeId+itemTypeId2)のどちらかを使う(networkObserverProcessing.ts参照)。
 export type ObserverSettings = {
@@ -187,6 +200,10 @@ export function generatePrecisionTerminalName(): string {
 
 export function generateDeliveryTerminalName(): string {
   return `DLV-${generateShortCode()}`;
+}
+
+export function generateIoPadName(): string {
+  return `IOP-${generateShortCode()}`;
 }
 
 export function locEquals(a: Vector3, b: Vector3): boolean {

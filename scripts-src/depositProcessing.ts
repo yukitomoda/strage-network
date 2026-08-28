@@ -1,4 +1,4 @@
-import { system, Vector3, world } from "@minecraft/server";
+import { Dimension, system, Vector3, world } from "@minecraft/server";
 import {
   appendDepositPartial,
   getDepositCancels,
@@ -19,7 +19,7 @@ import {
   PartialResultLine,
 } from "./state";
 import { getDrain } from "./storageSettings";
-import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
+import { getAttachedStorageLocation, isTerminalLikeBlock, IO_PAD_BLOCK_ID } from "./terminalBlock";
 import { CONTROLLER_SPEED_AXIS } from "./controllerAxes";
 import { getAxisTier } from "./upgrade";
 
@@ -146,7 +146,7 @@ export function processNetworkDeposits(network: NetworkData): boolean {
     const line = request.lines.find((l) => !l.exhausted && l.delivered < l.requested);
 
     if (!line) {
-      finalizeDeposit(network.id, request);
+      finalizeDeposit(network.id, dimension, request);
       requests = requests.slice(1);
       setDeposits(network.id, requests);
       continue;
@@ -155,7 +155,7 @@ export function processNetworkDeposits(network: NetworkData): boolean {
     // network.terminals(登録データ)を正とする。理由はorderProcessing.tsの同様の箇所を参照。
     const stillRegistered = network.terminals.some((t) => locEquals(t, request.terminal));
     if (!stillRegistered) {
-      finalizeDeposit(network.id, request);
+      finalizeDeposit(network.id, dimension, request);
       requests = requests.slice(1);
       setDeposits(network.id, requests);
       continue;
@@ -168,10 +168,16 @@ export function processNetworkDeposits(network: NetworkData): boolean {
     }
 
     // 預け入れ元はターミナルが張り付いている面(引き出しの搬入先と同じ場所)。毎回動的に見る。
-    const attachedLoc = getAttachedStorageLocation(terminalBlock);
-    const sourceContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+    // 搬入出パッド: orderProcessing.tsの搬入先解決と対称に、張り付いた先の代わりにパッドの上に
+    // 乗っているプレイヤー(request.playerName)のインベントリを預け入れ元にする。見つからなければ
+    // (ログアウト・パッドから離れた等)sourceContainerはundefinedのままとなり、下のif文の
+    // 「預け入れ元が無い」処理(shortfallとして確定)にそのまま乗る。
+    const sourceContainer =
+      terminalBlock.typeId === IO_PAD_BLOCK_ID
+        ? world.getPlayers().find((p) => p.name === request.playerName)?.getComponent("inventory")?.container
+        : dimension.getBlock(getAttachedStorageLocation(terminalBlock))?.getComponent("inventory")?.container;
     if (!sourceContainer) {
-      finalizeDeposit(network.id, request);
+      finalizeDeposit(network.id, dimension, request);
       requests = requests.slice(1);
       setDeposits(network.id, requests);
       continue;
@@ -231,7 +237,7 @@ function moveReadyDepositIssuingEntries(network: NetworkData): void {
   setDeposits(network.id, requests);
 }
 
-function finalizeDeposit(networkId: string, request: DepositRequest): void {
+function finalizeDeposit(networkId: string, dimension: Dimension, request: DepositRequest): void {
   const shortfall: PartialResultLine[] = request.lines
     .filter((l) => l.delivered < l.requested)
     .map((l) => ({ itemTypeId: l.itemTypeId, itemName: l.itemName, amount: l.requested - l.delivered }));
@@ -239,4 +245,14 @@ function finalizeDeposit(networkId: string, request: DepositRequest): void {
   if (shortfall.length > 0) {
     appendDepositPartial(networkId, { requestId: request.id, terminal: request.terminal, shortfall });
   }
+
+  // 預け入れは元々どのターミナルも完了通知の仕組みが無いが、搬入出パッドはioPadProgress.tsの
+  // 進捗表示に続けて完了もアクションバーに表示する(orderProcessing.tsのfinalizeOrderと対称、
+  // ユーザー要望)。他のターミナルの挙動は変えないため、io_padだけに絞る。
+  if (dimension.getBlock(request.terminal)?.typeId !== IO_PAD_BLOCK_ID) return;
+  const player = world.getPlayers().find((p) => p.name === request.playerName);
+  if (!player) return; // オフライン等。ログイン中の通知のみサポート(MVP、orderProcessing.tsと同じ方針)。
+  player.onScreenDisplay.setActionBar(
+    shortfall.length > 0 ? "§e搬入完了(一部搬入できませんでした)" : "§a搬入完了!"
+  );
 }

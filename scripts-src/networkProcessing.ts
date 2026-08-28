@@ -1,10 +1,11 @@
-import { system, world } from "@minecraft/server";
+import { Dimension, system, world } from "@minecraft/server";
 import { CONTROLLER_CYCLE_AXIS } from "./controllerAxes";
 import { processNetworkDeposits } from "./depositProcessing";
 import { getAllNetworks } from "./network";
 import { recalculateNetworkObservers } from "./networkObserverProcessing";
 import { processNetworkOrders } from "./orderProcessing";
 import { processNetworkOrganize } from "./organizeProcessing";
+import { NetworkData } from "./state";
 import { getAxisTier } from "./upgrade";
 
 // ネットワークオブザーバーの定期(プレイヤーによる手動でのストレージ出し入れを反映する)
@@ -26,17 +27,20 @@ export function getCycleIntervalTicks(tier: number): number {
 // ネットワークごとに「前回処理からこの間隔以上経過したか」を判定する。
 const BASE_LOOP_INTERVAL_TICKS = 5;
 
-// ネットワークID -> 最後に処理したsystem.currentTick。メモリ上だけで持てば十分
-// (ワールド再読み込みで消えても、次のtickで即座に再計測されるだけで実害が無い)。
-const lastProcessedTick = new Map<string, number>();
-
-// ネットワークID -> 前回オブザーバーを再計算してから経過したサイクル数。lastProcessedTickと
-// 同じくメモリ上だけで持てば十分(消えても次のサイクルで0から数え直されるだけ)。
+// ネットワークID -> 前回オブザーバーを再計算してから経過したサイクル数。メモリ上だけで持てば
+// 十分(ワールド再読み込みで消えても、次のサイクルで0から数え直されるだけで実害が無い)。
 const cyclesSinceObserverRecalc = new Map<string, number>();
 
-// 引き出し・預け入れ・整理を同じサイクルで処理する。それぞれ独立したスループット・
-// キューを持つため、いずれかが詰まっても他には影響しない。docs/design.md 4章参照。
-export function startNetworkProcessingLoop(): void {
+// 自動端末(autoOrderCheck.ts)/在庫管理ターミナル(inventoryCheck.ts)/精密ターミナル
+// (precisionTerminalCheck.ts)/搬入出パッド(padCheck.ts)の定期チェックが共通で使うスケジューラ。
+// 以前はこの4つ全て固定5秒間隔だった(搬入出パッドでは「パッドに乗ってから搬入出が始まるまで
+// ラグがある」というユーザー指摘の一因になっていた)が、本処理ループ(startNetworkProcessingLoop)
+// と同じ「基準ループ(5tick)+ネットワークごとの前回処理tickを記憶」というパターンに揃え、
+// コントローラの周期短縮キットのTierに応じたサイクル間隔(Tier0=100tick〜Tier4=10tick)に
+// 検知頻度も追従するようにした。呼び出しごとに専用の`lastProcessedTick`Mapを新設するため、
+// 4つの定期チェックは(見た目の間隔は揃っても)互いに独立したループとして動作し続ける。
+export function startCycleAlignedLoop(callback: (network: NetworkData, dimension: Dimension) => void): void {
+  const lastProcessedTick = new Map<string, number>();
   system.runInterval(() => {
     for (const network of getAllNetworks()) {
       const dimension = world.getDimension(network.dimensionId);
@@ -44,26 +48,33 @@ export function startNetworkProcessingLoop(): void {
       const last = lastProcessedTick.get(network.id);
       if (last !== undefined && system.currentTick - last < cycleTicks) continue;
       lastProcessedTick.set(network.id, system.currentTick);
+      callback(network, dimension);
+    }
+  }, BASE_LOOP_INTERVAL_TICKS);
+}
 
-      const ordersChanged = processNetworkOrders(network);
-      const depositsChanged = processNetworkDeposits(network);
-      processNetworkOrganize(network);
+// 引き出し・預け入れ・整理を同じサイクルで処理する。それぞれ独立したスループット・
+// キューを持つため、いずれかが詰まっても他には影響しない。docs/design.md 4章参照。
+export function startNetworkProcessingLoop(): void {
+  startCycleAlignedLoop((network, dimension) => {
+    const ordersChanged = processNetworkOrders(network);
+    const depositsChanged = processNetworkDeposits(network);
+    processNetworkOrganize(network);
 
-      // ネットワークオブザーバー(docs/design.md参照): コントローラによる引き出し/預け入れで
-      // 実際にアイテムが動いた場合は直ちに再計算し、周期カウンタもリセットする。動きが無くても、
-      // プレイヤーによる手動でのストレージ出し入れを反映するため5サイクルごとに再計算する。
-      if (ordersChanged || depositsChanged) {
+    // ネットワークオブザーバー(docs/design.md参照): コントローラによる引き出し/預け入れで
+    // 実際にアイテムが動いた場合は直ちに再計算し、周期カウンタもリセットする。動きが無くても、
+    // プレイヤーによる手動でのストレージ出し入れを反映するため5サイクルごとに再計算する。
+    if (ordersChanged || depositsChanged) {
+      recalculateNetworkObservers(dimension, network);
+      cyclesSinceObserverRecalc.set(network.id, 0);
+    } else {
+      const cycles = (cyclesSinceObserverRecalc.get(network.id) ?? 0) + 1;
+      if (cycles >= OBSERVER_RECALC_EVERY_N_CYCLES) {
         recalculateNetworkObservers(dimension, network);
         cyclesSinceObserverRecalc.set(network.id, 0);
       } else {
-        const cycles = (cyclesSinceObserverRecalc.get(network.id) ?? 0) + 1;
-        if (cycles >= OBSERVER_RECALC_EVERY_N_CYCLES) {
-          recalculateNetworkObservers(dimension, network);
-          cyclesSinceObserverRecalc.set(network.id, 0);
-        } else {
-          cyclesSinceObserverRecalc.set(network.id, cycles);
-        }
+        cyclesSinceObserverRecalc.set(network.id, cycles);
       }
     }
-  }, BASE_LOOP_INTERVAL_TICKS);
+  });
 }

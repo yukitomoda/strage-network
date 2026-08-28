@@ -1,29 +1,22 @@
-import { Container, system, Vector3, world } from "@minecraft/server";
+import { Container, Dimension, Vector3 } from "@minecraft/server";
 import { hasPendingSlotDepositFor, submitDeposit } from "./depositProcessing";
-import { getAllNetworks } from "./network";
+import { startCycleAlignedLoop } from "./networkProcessing";
 import { hasPendingSlotOrderFor, submitOrder } from "./orderProcessing";
 import { NetworkData, PrecisionSlotLine } from "./state";
 import { getAttachedStorageLocation, isRedstoneLocked, PRECISION_TERMINAL_BLOCK_ID } from "./terminalBlock";
 import { getPrecisionSlots } from "./terminalSettings";
 
-// autoOrderCheck.tsのAUTO_CHECK_INTERVAL_TICKSと同じ間隔(5秒)。MVP: 固定値。
-const CHECK_INTERVAL_TICKS = 100;
-
 // 自動発注・自動回収には送信元プレイヤーが存在しないため、空文字列にしておく
 // (autoOrderCheck.tsのAUTO_ORDER_PLAYER_NAMEと同じ考え方)。
 const AUTO_ORDER_PLAYER_NAME = "";
 
+// networkProcessing.tsのstartCycleAlignedLoop参照: 以前は固定100tick(5秒)間隔だったが、
+// コントローラの周期短縮キットのTierに応じたサイクル間隔に検知頻度も追従するようにした。
 export function startPrecisionTerminalCheckLoop(): void {
-  system.runInterval(() => {
-    for (const network of getAllNetworks()) {
-      checkNetworkPrecisionTerminals(network);
-    }
-  }, CHECK_INTERVAL_TICKS);
+  startCycleAlignedLoop(checkNetworkPrecisionTerminals);
 }
 
-function checkNetworkPrecisionTerminals(network: NetworkData): void {
-  const dimension = world.getDimension(network.dimensionId);
-
+function checkNetworkPrecisionTerminals(network: NetworkData, dimension: Dimension): void {
   for (const terminalLoc of network.terminals) {
     const block = dimension.getBlock(terminalLoc);
     if (!block?.isValid || block.typeId !== PRECISION_TERMINAL_BLOCK_ID) continue;

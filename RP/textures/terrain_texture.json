@@ -22,6 +22,9 @@
     },
     "wh:network_observer": {
       "textures": "textures/blocks/network_observer"
+    },
+    "wh:io_pad": {
+      "textures": "textures/blocks/io_pad"
     }
   }
 }

@@ -1,5 +1,5 @@
 import { Dimension, Entity, Vector3 } from "@minecraft/server";
-import { locEquals, PrecisionSlotLine, StockTargetLine, WishlistLine } from "./state";
+import { locEquals, PadMode, PadTargetLine, PrecisionSlotLine, StockTargetLine, WishlistLine } from "./state";
 
 // ターミナルごとのローカル設定を保持する非表示エンティティ。ブロックには動的プロパティを
 // 持たせられないため(docs/design.md 2章参照)。network.terminals(所属情報)とは意図的に
@@ -16,6 +16,8 @@ const STOCK_TARGETS_PROPERTY = "wh:stock_targets";
 const AUTO_DEPOSIT_PROPERTY = "wh:auto_deposit";
 const INVENTORY_AUTO_DEPOSIT_PROPERTY = "wh:inventory_auto_deposit";
 const PRECISION_SLOTS_PROPERTY = "wh:precision_slots";
+const PAD_TARGETS_PROPERTY = "wh:pad_targets";
+const PAD_MODE_PROPERTY = "wh:pad_mode";
 const OWNER_LOCATION_PROPERTY = "wh:owner_loc";
 
 function centerOf(loc: Vector3): Vector3 {
@@ -153,4 +155,29 @@ export function getPrecisionSlots(dimension: Dimension, terminalLoc: Vector3): P
 
 export function setPrecisionSlots(dimension: Dimension, terminalLoc: Vector3, slots: PrecisionSlotLine[]): void {
   ensureEntity(dimension, terminalLoc).setDynamicProperty(PRECISION_SLOTS_PROPERTY, JSON.stringify(slots));
+}
+
+// 搬入出パッドの「プレイヤーがパッドの上で維持したい所持数」リスト。他のターミナルは使わない。
+export function getPadTargets(dimension: Dimension, terminalLoc: Vector3): PadTargetLine[] {
+  const raw = findSettingsEntity(dimension, terminalLoc)?.getDynamicProperty(PAD_TARGETS_PROPERTY);
+  if (typeof raw !== "string") return [];
+  try {
+    return JSON.parse(raw) as PadTargetLine[];
+  } catch {
+    return [];
+  }
+}
+
+export function setPadTargets(dimension: Dimension, terminalLoc: Vector3, targets: PadTargetLine[]): void {
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(PAD_TARGETS_PROPERTY, JSON.stringify(targets));
+}
+
+// 搬入出パッドの動作モード(padCheck.ts参照)。デフォルトは両方向の"both"。
+export function getPadMode(dimension: Dimension, terminalLoc: Vector3): PadMode {
+  const value = findSettingsEntity(dimension, terminalLoc)?.getDynamicProperty(PAD_MODE_PROPERTY);
+  return value === "deposit_only" || value === "withdraw_only" ? value : "both";
+}
+
+export function setPadMode(dimension: Dimension, terminalLoc: Vector3, mode: PadMode): void {
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(PAD_MODE_PROPERTY, mode);
 }
