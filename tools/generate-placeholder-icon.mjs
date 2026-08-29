@@ -104,6 +104,52 @@ function ioPadColorAt(u, v) {
   return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
 }
 
+// 吸い込みパッド: 上面だけに渦模様を出し、側面/底面は無地の枠にする(ユーザー要望。
+// ネットワークオブザーバーと違って向きの概念が無く、常に真上が回収面のため、Box UVのような
+// 回転対応の仕組みは不要で、minecraft:geometry.full_blockのmaterial_instancesに"up"だけ別の
+// テクスチャを割り当てるだけで済む。BP/blocks/suction_pad.json参照)。
+// 上面: 中心へ向かうにつれて明るくなる同心リング(4本)で「周囲から中心へ吸い込む」渦を表現。
+// 搬入出パッド(ローズ/ティールの二重リング)とは色調(琥珀色)で見分けが付くようにしている。
+function suctionPadTopColorAt(u, v) {
+  const bevel = edgeBevel(u, v, 0.09);
+  let [r, g, b] = [40, 38, 34];
+  if (bevel === 1) [r, g, b] = [r + 22, g + 22, b + 22];
+  else if (bevel === -1) [r, g, b] = [r - 18, g - 18, b - 18];
+
+  const nearCornerU = Math.abs(u - 0.14) < 0.035 || Math.abs(u - 0.86) < 0.035;
+  const nearCornerV = Math.abs(v - 0.14) < 0.035 || Math.abs(v - 0.86) < 0.035;
+  if (nearCornerU && nearCornerV) [r, g, b] = [20, 18, 16];
+
+  const dist = Math.hypot(u - 0.5, v - 0.5);
+  const ringIndex = Math.floor(dist / 0.09);
+  if (dist < 0.4 && ringIndex % 2 === 0) {
+    const t = 1 - Math.min(1, dist / 0.4);
+    r = 90 + 140 * t;
+    g = 65 + 110 * t;
+    b = 20 + 20 * t;
+  }
+  if (dist < 0.06) [r, g, b] = [255, 235, 190];
+
+  const n = (hashNoise(u, v) - 0.5) * 6;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
+// 吸い込みパッドの側面/底面: 上面と同じ枠(ベベル+四隅のリベット)だけで、渦模様は乗せない
+// (回収面は常に上面だけなので、それ以外の面に模様を出すと紛らわしいというユーザー指摘)。
+function suctionPadSideColorAt(u, v) {
+  const bevel = edgeBevel(u, v, 0.09);
+  let [r, g, b] = [40, 38, 34];
+  if (bevel === 1) [r, g, b] = [r + 22, g + 22, b + 22];
+  else if (bevel === -1) [r, g, b] = [r - 18, g - 18, b - 18];
+
+  const nearCornerU = Math.abs(u - 0.14) < 0.035 || Math.abs(u - 0.86) < 0.035;
+  const nearCornerV = Math.abs(v - 0.14) < 0.035 || Math.abs(v - 0.86) < 0.035;
+  if (nearCornerU && nearCornerV) [r, g, b] = [20, 18, 16];
+
+  const n = (hashNoise(u, v) - 0.5) * 6;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
 // インベントリ等で使う正面からの単純な2Dアイコン(controllerColorAtの構図を16x16へ縮めたもの)。
 function networkObserverIconColorAt(u, v) {
   const bevel = edgeBevel(u, v, 0.1);
@@ -447,6 +493,8 @@ writePng("RP/textures/blocks/precision_terminal.png", 32, precisionTerminalColor
 writePng("RP/textures/blocks/delivery_terminal.png", 32, deliveryTerminalColorAt);
 writePng("RP/textures/blocks/network_observer.png", NETWORK_OBSERVER_CANVAS_SIZE, networkObserverColorAt);
 writePng("RP/textures/blocks/io_pad.png", 32, ioPadColorAt);
+writePng("RP/textures/blocks/suction_pad_top.png", 32, suctionPadTopColorAt);
+writePng("RP/textures/blocks/suction_pad_side.png", 32, suctionPadSideColorAt);
 writePng("RP/textures/blocks/terminal_icon.png", 16, terminalIconColorAt);
 writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorAt);
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);

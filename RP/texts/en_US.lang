@@ -6,6 +6,7 @@ tile.wh:precision_terminal.name=Precision Terminal
 tile.wh:delivery_terminal.name=Delivery Terminal
 tile.wh:network_observer.name=Network Observer
 tile.wh:io_pad.name=I/O Pad
+tile.wh:suction_pad.name=Suction Pad
 item.wh:wrench=Warehouse Wrench
 item.wh:test_filler=[Test] Random Filler
 item.wh:speed_kit_tier1=T1 Speed Upgrade Kit
@@ -49,6 +50,8 @@ item.wh:precision_terminal.desc.1=§7§oA terminal that maintains a target item 
 item.wh:delivery_terminal.desc.1=§7§oWhen a withdrawal is delivered, it goes straight into the ordering player's inventory. If offline, it goes to the storage instead.
 item.wh:io_pad.desc.1=§7§oA pad that periodically exchanges items with the network to keep a player standing on it at a target amount.
 item.wh:io_pad.desc.usage=§7Connect it to a network and stand on it to use it.
+item.wh:suction_pad.desc.1=§7§oA pad that periodically picks up items dropped near its top and deposits them into the network.
+item.wh:suction_pad.desc.usage=§7Just connect it to a network to use it (no configuration needed).
 item.wh:terminal_family.desc.usage=§7Place it on a storage and connect it to a network to use it.
 
 item.wh:network_observer.desc.1=§7§oOutputs a redstone signal based on the network's item counts.

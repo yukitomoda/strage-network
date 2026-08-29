@@ -194,6 +194,33 @@ export function insertIntoStorages(
   return amount - remaining;
 }
 
+// 吸い込みパッド専用。insertIntoStoragesと対称だが、取り出し元がコンテナのスロットではなく
+// 単一のItemStack(アイテムエンティティの中身)である点が異なる。アイテムエンティティは
+// EntityItemComponent.itemStackが読み取り専用でスロットも持たないため、既存のinsertIntoStorages/
+// insertSlotIntoStoragesは使えない(どちらもsourceContainerからの読み書きを前提にしている)。
+// 戻り値は実際に搬入できた数(候補先が満杯ならstack.amountより少なくなる。呼び出し元が
+// 差分をアイテムエンティティとして地面に戻す)。
+export function insertItemStackIntoStorages(
+  dimension: Dimension,
+  network: NetworkData,
+  stack: ItemStack,
+  storageIndex?: StorageIndex,
+  destinationStorages: Vector3[] = network.storages
+): number {
+  const key = displayKeyOf(stack);
+  const orderedStorages = orderStoragesByPriority(destinationStorages, key, storageIndex);
+
+  let leftover: ItemStack | undefined = stack.clone();
+  for (const loc of orderedStorages) {
+    if (!leftover) break;
+    const destContainer = dimension.getBlock(loc)?.getComponent("inventory")?.container;
+    if (!destContainer) continue;
+    leftover = destContainer.addItem(leftover);
+  }
+
+  return stack.amount - (leftover?.amount ?? 0);
+}
+
 // 精密ターミナル(orderProcessing.tsのline.slotIndices経由、1スロットずつ呼ばれる。単一スロット
 // なら直接、複数スロットならextractFromStoragesIntoSlots経由)専用。extractFromStoragesと同じ順で
 // ネットワークのストレージを走査するが、格納先はdestContainerの指定スロットのみ

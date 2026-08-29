@@ -25,6 +25,12 @@
     },
     "wh:io_pad": {
       "textures": "textures/blocks/io_pad"
+    },
+    "wh:suction_pad_top": {
+      "textures": "textures/blocks/suction_pad_top"
+    },
+    "wh:suction_pad_side": {
+      "textures": "textures/blocks/suction_pad_side"
     }
   }
 }

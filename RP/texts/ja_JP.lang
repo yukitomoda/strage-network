@@ -6,6 +6,7 @@ tile.wh:precision_terminal.name=精密ターミナル
 tile.wh:delivery_terminal.name=配達ターミナル
 tile.wh:network_observer.name=ネットワークオブザーバー
 tile.wh:io_pad.name=搬入出パッド
+tile.wh:suction_pad.name=吸い込みパッド
 item.wh:wrench=倉庫レンチ
 item.wh:test_filler=[テスト用] ランダム充填ツール
 item.wh:speed_kit_tier1=T1 速度強化キット
@@ -49,6 +50,8 @@ item.wh:precision_terminal.desc.1=§7§oストレージの指定スロットに�
 item.wh:delivery_terminal.desc.1=§7§o引き出しを行うと、注文したプレイヤーのインベントリへ優先的に直接届ける端末。オフラインの場合はストレージへ届く。
 item.wh:io_pad.desc.1=§7§oプレイヤーが上に乗ると、設定した所持数を維持するように定期的にネットワークとアイテムを出し入れするパッド。
 item.wh:io_pad.desc.usage=§7ネットワークに接続し、上に乗って使用します。
+item.wh:suction_pad.desc.1=§7§o上面付近に落ちているアイテムを定期的に回収し、ネットワークへ預け入れるパッド。
+item.wh:suction_pad.desc.usage=§7ネットワークに接続すると使用できます(設定は不要です)。
 item.wh:terminal_family.desc.usage=§7ストレージに設置し、ネットワークに接続して使用します。
 
 item.wh:network_observer.desc.1=§7§oネットワークの在庫数に応じてレッドストーン信号を発するブロック。

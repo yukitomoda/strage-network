@@ -6,15 +6,19 @@ import { reconcilePrecisionTerminalDeposit, reconcilePrecisionTerminalWithdrawal
 import { NetworkData } from "./state";
 import { buildStorageIndex, StorageIndex } from "./storageScan";
 import { getDrain } from "./storageSettings";
+import { reconcileSuctionPadDeposit } from "./suctionPadCheck";
 import {
   AUTO_TERMINAL_BLOCK_ID,
   INVENTORY_TERMINAL_BLOCK_ID,
   IO_PAD_BLOCK_ID,
   isRedstoneLocked,
   PRECISION_TERMINAL_BLOCK_ID,
+  SUCTION_PAD_BLOCK_ID,
 } from "./terminalBlock";
 
 // 目標系ターミナル(自動端末・在庫管理ターミナル・精密ターミナル・搬入出パッド)の「広告モデル」
+// (吸い込みパッドも預け入れ方向のみ同じ枠組みに乗る。目標を持たず範囲内を無条件回収するだけの
+// 点が他の4種と異なるため、reconcileAllTargetWithdrawals側には登録していない。30章参照)
 // (25章、ユーザー提案)のディスパッチャ。以前は各ターミナルが専用のチェックループでshortfall/
 // excessを計算し`submitOrder`/`submitDeposit`でキューに積んでいたが、目標値は既に
 // terminalSettings.tsに永続化されているため、コントローラの処理サイクル(orderProcessing.tsの
@@ -88,6 +92,9 @@ export function reconcileAllTargetDeposits(
         break;
       case IO_PAD_BLOCK_ID:
         consumed += reconcileIoPadDeposit(network, dimension, block, remaining, index, targets);
+        break;
+      case SUCTION_PAD_BLOCK_ID:
+        consumed += reconcileSuctionPadDeposit(network, dimension, block, remaining, index, targets);
         break;
     }
   }

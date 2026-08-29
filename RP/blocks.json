@@ -14,5 +14,8 @@
   },
   "wh:io_pad": {
     "sound": "stone"
+  },
+  "wh:suction_pad": {
+    "sound": "stone"
   }
 }

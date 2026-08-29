@@ -11,6 +11,7 @@ import { startDeliveryProgressLoop } from "./deliveryProgress";
 import { ioPadBlockComponent } from "./ioPadBlock";
 import { startPadProgressLoop } from "./ioPadProgress";
 import { registerStorageBreakWatcher } from "./storageLifecycle";
+import { suctionPadBlockComponent } from "./suctionPadBlock";
 import { testFillerItemComponent } from "./testFiller";
 import { terminalBlockComponent } from "./terminalBlock";
 import { upgradeKitItemComponent } from "./upgradeKit";
@@ -25,6 +26,7 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRe
   blockComponentRegistry.registerCustomComponent("wh:network_observer", networkObserverBlockComponent);
   blockComponentRegistry.registerCustomComponent("wh:delivery_terminal", deliveryTerminalBlockComponent);
   blockComponentRegistry.registerCustomComponent("wh:io_pad", ioPadBlockComponent);
+  blockComponentRegistry.registerCustomComponent("wh:suction_pad", suctionPadBlockComponent);
   itemComponentRegistry.registerCustomComponent("wh:wrench", wrenchItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:test_filler", testFillerItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:upgrade_kit", upgradeKitItemComponent);

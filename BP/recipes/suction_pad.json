@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:suction_pad"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:hopper" },
+      "B": { "item": "wh:auto_terminal" },
+      "C": { "item": "minecraft:redstone" }
+    },
+    "pattern": [" A ", " B ", " C "],
+    "result": { "item": "wh:suction_pad" },
+    "unlock": [{ "item": "wh:auto_terminal" }]
+  }
+}

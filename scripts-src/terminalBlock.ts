@@ -11,10 +11,11 @@ export const INVENTORY_TERMINAL_BLOCK_ID = "wh:inventory_terminal";
 export const PRECISION_TERMINAL_BLOCK_ID = "wh:precision_terminal";
 export const DELIVERY_TERMINAL_BLOCK_ID = "wh:delivery_terminal";
 export const IO_PAD_BLOCK_ID = "wh:io_pad";
+export const SUCTION_PAD_BLOCK_ID = "wh:suction_pad";
 
 // 引き出し・預け入れキュー処理、レンチでの接続対象など、「ターミナルとして扱ってよいブロックか」の判定を
 // 一箇所にまとめる。通常のターミナル・自動端末・在庫管理ターミナル・精密ターミナル・配達ターミナル・
-// 搬入出パッドのいずれも対象。
+// 搬入出パッド・吸い込みパッドのいずれも対象。
 export function isTerminalLikeBlock(typeId: string): boolean {
   return (
     typeId === TERMINAL_BLOCK_ID ||
@@ -22,7 +23,8 @@ export function isTerminalLikeBlock(typeId: string): boolean {
     typeId === INVENTORY_TERMINAL_BLOCK_ID ||
     typeId === PRECISION_TERMINAL_BLOCK_ID ||
     typeId === DELIVERY_TERMINAL_BLOCK_ID ||
-    typeId === IO_PAD_BLOCK_ID
+    typeId === IO_PAD_BLOCK_ID ||
+    typeId === SUCTION_PAD_BLOCK_ID
   );
 }
 

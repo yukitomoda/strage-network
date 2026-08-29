@@ -71,6 +71,15 @@ const IO_PAD_LORE: RawMessage[] = [
   ADDON_SIGNATURE_LINE,
 ];
 
+// 吸い込みパッドも搬入出パッドと同じ理由(ストレージに張り付かない)で専用の使い方説明を持つ。
+const SUCTION_PAD_LORE: RawMessage[] = [
+  { translate: "item.wh:suction_pad.desc.1" },
+  BLANK_LINE,
+  { translate: "item.wh:suction_pad.desc.usage" },
+  BLANK_LINE,
+  ADDON_SIGNATURE_LINE,
+];
+
 // 速度強化キット: T1〜T4で文章自体は共通(item.wh:speed_kit.desc.*)で、スループット・Tier
 // 番号・最大Tierだけがそのキットのtierに応じて変わる。数値を説明文にベタ書きしないのは、
 // 後でスループットのテーブル(orderProcessing.ts等)を調整した時に自動で反映されるようにする
@@ -137,6 +146,7 @@ const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
   "wh:precision_terminal": PRECISION_TERMINAL_LORE,
   "wh:delivery_terminal": DELIVERY_TERMINAL_LORE,
   "wh:io_pad": IO_PAD_LORE,
+  "wh:suction_pad": SUCTION_PAD_LORE,
   "wh:network_observer": NETWORK_OBSERVER_LORE,
   "wh:speed_kit_tier1": () => buildSpeedKitLore(1),
   "wh:speed_kit_tier2": () => buildSpeedKitLore(2),
