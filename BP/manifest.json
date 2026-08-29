@@ -4,27 +4,27 @@
     "name": "Storage Network (Dev) - Behavior Pack",
     "description": "個人利用向けの倉庫(ストレージネットワーク)アドオン (ビヘイビアパック)",
     "uuid": "290ed4cf-9a04-4ec2-9b8c-9ef37c36653c",
-    "version": [0, 5, 0],
+    "version": [0, 5, 1],
     "min_engine_version": [1, 26, 0]
   },
   "modules": [
     {
       "type": "data",
       "uuid": "6354596b-0fe3-4ce2-a4ef-359704115a36",
-      "version": [0, 5, 0]
+      "version": [0, 5, 1]
     },
     {
       "type": "script",
       "language": "javascript",
       "uuid": "28cc02b6-ca6b-4891-9e44-005e6ac82d96",
       "entry": "scripts/main.js",
-      "version": [0, 5, 0]
+      "version": [0, 5, 1]
     }
   ],
   "dependencies": [
     {
       "uuid": "d75168b3-89a2-49cf-ba6e-bcbc9d5a16ae",
-      "version": [0, 5, 0]
+      "version": [0, 5, 1]
     },
     {
       "module_name": "@minecraft/server",
