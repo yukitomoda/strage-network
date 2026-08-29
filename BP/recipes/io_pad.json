@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:io_pad"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:heavy_weighted_pressure_plate" },
+      "B": { "item": "wh:auto_terminal" },
+      "C": { "item": "minecraft:hopper" }
+    },
+    "pattern": [" A ", " B ", " C "],
+    "result": { "item": "wh:io_pad" },
+    "unlock": [{ "item": "wh:auto_terminal" }]
+  }
+}

@@ -7,11 +7,10 @@
     "tags": ["crafting_table"],
     "key": {
       "A": { "item": "minecraft:name_tag" },
-      "B": { "item": "minecraft:ender_pearl" },
-      "C": { "item": "wh:terminal" },
-      "D": { "item": "minecraft:redstone" }
+      "B": { "item": "wh:terminal" },
+      "C": { "item": "minecraft:leather" }
     },
-    "pattern": [" A ", "BCB", " D "],
+    "pattern": [" A ", " B ", " C "],
     "result": { "item": "wh:delivery_terminal" },
     "unlock": [{ "item": "wh:terminal" }]
   }

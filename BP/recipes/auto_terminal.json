@@ -7,11 +7,10 @@
     "tags": ["crafting_table"],
     "key": {
       "A": { "item": "minecraft:dropper" },
-      "B": { "item": "minecraft:repeater" },
       "C": { "item": "wh:terminal" },
       "D": { "item": "minecraft:clock" }
     },
-    "pattern": [" A ", "BCB", " D "],
+    "pattern": [" A ", " C ", " D "],
     "result": { "item": "wh:auto_terminal" },
     "unlock": [{ "item": "wh:terminal" }]
   }

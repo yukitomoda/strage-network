@@ -8,11 +8,11 @@
     "key": {
       "A": { "item": "minecraft:iron_ingot" },
       "B": { "item": "minecraft:glass" },
-      "C": { "item": "minecraft:comparator" },
+      "C": { "item": "minecraft:redstone" },
       "D": { "item": "minecraft:hopper" }
     },
-    "pattern": ["ABA", "BCB", "ADA"],
+    "pattern": [" B ", "BCB", "ADA"],
     "result": { "item": "wh:terminal" },
-    "unlock": [{ "item": "minecraft:comparator" }]
+    "unlock": [{ "item": "minecraft:redstone" }]
   }
 }

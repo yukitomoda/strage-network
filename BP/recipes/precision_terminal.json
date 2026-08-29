@@ -10,7 +10,7 @@
       "B": { "item": "minecraft:target" },
       "C": { "item": "wh:auto_terminal" }
     },
-    "pattern": ["ABA", "CCC", "ABA"],
+    "pattern": [" B ", " C ", " A "],
     "result": { "item": "wh:precision_terminal" },
     "unlock": [{ "item": "wh:auto_terminal" }]
   }
