@@ -194,7 +194,8 @@ export function insertIntoStorages(
   return amount - remaining;
 }
 
-// 精密ターミナル(orderProcessing.tsのline.slotIndex経由)専用。extractFromStoragesと同じ順で
+// 精密ターミナル(orderProcessing.tsのline.slotIndices経由、1スロットずつ呼ばれる。単一スロット
+// なら直接、複数スロットならextractFromStoragesIntoSlots経由)専用。extractFromStoragesと同じ順で
 // ネットワークのストレージを走査するが、格納先はdestContainerの指定スロットのみ
 // (「コンテナのどこでもいい」という前提のextractFromStoragesとは異なる)。既存の中身がkeyと
 // 矛盾する場合は何もしない(精密ターミナルの希望リスト補充では、呼び出し元のprecisionTerminalCheck.ts
@@ -250,6 +251,65 @@ export function extractFromStoragesIntoSlot(
   }
 
   return requested - remaining;
+}
+
+// n個のスロットにamountをできるだけ均等に配分する(端数は配列の先頭側から+1個ずつ乗せる)。
+// 精密ターミナルの複数スロット指定(1エントリで複数スロットを維持する機能)の配分計算に使う。
+export function evenSplit(amount: number, n: number): number[] {
+  if (n <= 0) return [];
+  const base = Math.floor(amount / n);
+  const remainder = amount % n;
+  return Array.from({ length: n }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
+// ネットワーク内に指定アイテムが実際にどれだけあるか(上限capまで)を読み取り専用で数える。
+// extractFromStoragesIntoSlotsが、スロットへの配分量を決める前に「実際に取り出せる総量」を
+// 把握するために使う(取り出しは行わない)。
+function countAvailable(dimension: Dimension, network: NetworkData, key: DisplayKey, cap: number): number {
+  let total = 0;
+  for (const loc of network.storages) {
+    if (total >= cap) break;
+    const container = dimension.getBlock(loc)?.getComponent("inventory")?.container;
+    if (!container) continue;
+    for (let i = 0; i < container.size && total < cap; i++) {
+      const item = container.getItem(i);
+      if (!item || !displayKeyEquals(displayKeyOf(item), key)) continue;
+      total += item.amount;
+    }
+  }
+  return Math.min(total, cap);
+}
+
+// 精密ターミナルの複数スロット指定(1エントリで複数スロットを維持する機能。ユーザー要望)専用。
+// 単純に先頭のスロットから満たしていくと、ネットワーク在庫が要求量に足りない場合に後方の
+// スロットだけ0のまま、という偏った結果になってしまう(例: 3スロットに10個ずつ要求しているのに
+// 在庫が20個しか無い場合、10,10,0になってしまう)。そこで先に「実際に取り出せる総量」を
+// countAvailableで確定させてから、evenSplitで各スロットへの配分量を決め、1スロットずつ
+// extractFromStoragesIntoSlotを呼ぶ(例: 20個を3スロットに配分 -> 7,7,6)。各スロットの
+// 空き容量(スタック上限)によっては配分通りに届かないことがあるが、それは物理的な制約として
+// 許容する(「可能な限り均等に分配する」というユーザー要望の通り)。
+export function extractFromStoragesIntoSlots(
+  dimension: Dimension,
+  network: NetworkData,
+  key: DisplayKey,
+  amount: number,
+  destContainer: Container,
+  slotIndices: number[]
+): number {
+  if (slotIndices.length === 0) return 0;
+  if (slotIndices.length === 1) {
+    return extractFromStoragesIntoSlot(dimension, network, key, amount, destContainer, slotIndices[0]);
+  }
+
+  const available = countAvailable(dimension, network, key, amount);
+  const allocations = evenSplit(available, slotIndices.length);
+
+  let delivered = 0;
+  for (let i = 0; i < slotIndices.length; i++) {
+    if (allocations[i] <= 0) continue;
+    delivered += extractFromStoragesIntoSlot(dimension, network, key, allocations[i], destContainer, slotIndices[i]);
+  }
+  return delivered;
 }
 
 // 精密ターミナル専用。insertIntoStoragesと対称だが、取り出し元はsourceContainerの指定スロットのみ

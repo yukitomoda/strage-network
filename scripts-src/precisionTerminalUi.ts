@@ -11,6 +11,7 @@ import { listActiveDeposits } from "./depositProcessing";
 import { matchesSearchQuery } from "./itemIdentity";
 import { findMembership } from "./network";
 import { listActiveOrders } from "./orderProcessing";
+import { formatSlotRange, parseSlotIndices } from "./slotRange";
 import { locEquals, PrecisionSlotLine } from "./state";
 import { setupQuantitySlider } from "./quantitySlider";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
@@ -73,8 +74,28 @@ function setupSlotRuleTab(
     return undefined;
   }
 
+  // 1エントリが複数スロットを指定できる(ユーザー要望)ため、グループ内のどれか1つでも
+  // 無効なら警告する。最初に見つかった理由を代表として表示する。
+  function slotGroupValidityReason(slotIndices: number[]): string | undefined {
+    for (const slotIndex of slotIndices) {
+      const reason = slotValidityReason(slotIndex);
+      if (reason) return reason;
+    }
+    return undefined;
+  }
+
+  // 2つのスロット群が(順序・重複を無視して)完全に同じ集合かどうか。upsertSlotが
+  // 「既存エントリの更新」か「新規追加」かを判定するのに使う(以前はslotIndexの単純な一致で
+  // 判定していたのを一般化した)。
+  function sameSlots(a: number[], b: number[]): boolean {
+    if (a.length !== b.length) return false;
+    const sortedA = [...a].sort((x, y) => x - y);
+    const sortedB = [...b].sort((x, y) => x - y);
+    return sortedA.every((v, i) => v === sortedB[i]);
+  }
+
   function upsertSlot(line: PrecisionSlotLine): void {
-    const existingIndex = slots.findIndex((s) => s.slotIndex === line.slotIndex);
+    const existingIndex = slots.findIndex((s) => sameSlots(s.slotIndices, line.slotIndices));
     if (existingIndex === -1 && slots.length >= MAX_SLOT_LINES) return; // 上限超過は無視
     if (existingIndex !== -1) slots[existingIndex] = line;
     else slots.push(line);
@@ -82,9 +103,10 @@ function setupSlotRuleTab(
     refreshCurrent();
   }
 
-  function readSlotIndex(): number | undefined {
-    const slotIndex = Math.floor(Number(slotNumberText.getData()));
-    return Number.isFinite(slotIndex) && slotIndex >= 0 ? slotIndex : undefined;
+  // 「1」「1,2,3」「1-3」「1,3-5,7」のような書式をパースする(slotRange.ts参照)。不正な入力は
+  // undefinedになり、呼び出し元は何もしない(既存のreadSlotIndexと同じ「無効なら無視」方針)。
+  function readSlotIndices(): number[] | undefined {
+    return parseSlotIndices(slotNumberText.getData());
   }
 
   function searchRowMessage(entry: CatalogEntry): UIRawMessage {
@@ -113,22 +135,23 @@ function setupSlotRuleTab(
 
   function slotLineMessage(line: PrecisionSlotLine): UIRawMessage {
     const collectSuffix = line.collect ? " (回収)" : "";
+    const slotLabel = formatSlotRange(line.slotIndices);
     // スロットが実在しない場合は警告マークを付ける。ボタンのラベルには§書式コードが効かない
     // (実機で確認済み。tooltipには効く)ため、ここでは色は付けられず記号のみになる。
-    const warningPrefix: UIRawMessage[] = slotValidityReason(line.slotIndex) ? [{ text: "⚠ " }] : [];
+    const warningPrefix: UIRawMessage[] = slotGroupValidityReason(line.slotIndices) ? [{ text: "⚠ " }] : [];
     if (line.targetAmount <= 0 || !line.itemTypeId) {
-      return { rawtext: [...warningPrefix, { text: `${line.slotIndex}: -> 空${collectSuffix}` }] };
+      return { rawtext: [...warningPrefix, { text: `${slotLabel}: -> 空${collectSuffix}` }] };
     }
     const namePart: UIRawMessage = line.itemName
       ? { text: line.itemName }
       : { translate: new ItemStack(line.itemTypeId, 1).localizationKey };
     return {
-      rawtext: [...warningPrefix, { text: `${line.slotIndex}: ` }, namePart, { text: ` -> ${line.targetAmount}${collectSuffix}` }],
+      rawtext: [...warningPrefix, { text: `${slotLabel}: ` }, namePart, { text: ` -> ${line.targetAmount}${collectSuffix}` }],
     };
   }
 
   function slotLineTooltip(line: PrecisionSlotLine): UIRawMessage {
-    const reason = slotValidityReason(line.slotIndex);
+    const reason = slotGroupValidityReason(line.slotIndices);
     return { text: reason ? `§c${reason}` : "§7タップで削除します。" };
   }
 
@@ -153,7 +176,10 @@ function setupSlotRuleTab(
   });
 
   form.label("スロット番号を指定して、維持したいアイテムと数量を設定します。", { visible: tabVisible });
-  form.textField("スロット番号", slotNumberText, { visible: tabVisible });
+  form.textField("スロット番号", slotNumberText, {
+    description: "例: 1 / 1,2,3 / 1-3 / 1,3-5,7(複数指定時は各スロットへ均等に分配します)",
+    visible: tabVisible,
+  });
   form.toggle("回収", collect, {
     visible: tabVisible,
   });
@@ -186,12 +212,12 @@ function setupSlotRuleTab(
       () => {
         const entry = filtered[i];
         if (!entry) return;
-        const slotIndex = readSlotIndex();
-        if (slotIndex === undefined) return;
+        const slotIndices = readSlotIndices();
+        if (slotIndices === undefined) return;
 
         const amount = Math.max(1, Math.floor(targetAmount.getData()));
         upsertSlot({
-          slotIndex,
+          slotIndices,
           itemTypeId: entry.key.typeId,
           itemName: entry.key.name,
           targetAmount: amount,
@@ -242,11 +268,11 @@ function setupSlotRuleTab(
   form.button(
     "目標を空に設定する",
     () => {
-      const slotIndex = readSlotIndex();
-      if (slotIndex === undefined) return;
-      // 目標を0(itemTypeId無し)にする。「回収」がONならこのスロットは事実上、
+      const slotIndices = readSlotIndices();
+      if (slotIndices === undefined) return;
+      // 目標を0(itemTypeId無し)にする。「回収」がONならこれらのスロットは事実上、
       // 中身が何であれ常に全量回収される(=旧来の「出力スロット」相当)。
-      upsertSlot({ slotIndex, targetAmount: 0, collect: collect.getData() });
+      upsertSlot({ slotIndices, targetAmount: 0, collect: collect.getData() });
     },
     { visible: tabVisible }
   );

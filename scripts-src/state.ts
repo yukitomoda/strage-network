@@ -21,8 +21,10 @@ export type OrderLine = {
   delivered: number;
   exhausted: boolean;
   // 精密ターミナル(precisionTerminalCheck.ts)からの依頼のみ指定される。搬入先コンテナの
-  // 「どこでもいい」ではなく指定スロットへ直接搬入する(storageScan.tsのextractFromStoragesIntoSlot参照)。
-  slotIndex?: number;
+  // 「どこでもいい」ではなく指定スロット群へ直接搬入する(storageScan.tsのextractFromStoragesIntoSlots
+  // 参照)。1つのエントリが複数スロットを指定していることがあり、その場合は要求量を各スロットへ
+  // できるだけ均等に分配する(ユーザー要望)。単一スロットなら要素数1の配列になる。
+  slotIndices?: number[];
 };
 
 export type Order = {
@@ -99,17 +101,20 @@ export type StockTargetLine = {
   targetAmount: number;
 };
 
-// 精密ターミナルの「スロットごとのルール」。アタッチ先コンテナの指定スロットを対象に、
+// 精密ターミナルの「スロットごとのルール」。アタッチ先コンテナの指定スロット群を対象に、
 // targetAmount分のitemTypeIdを維持しつつ(不足分はネットワークから補充)、collectがtrueなら
 // 目標外の品目・目標を超えた余剰分をネットワークへ回収する(precisionTerminalCheck.ts参照)。
 // targetAmountが0(itemTypeId未設定=「目標なし」)の場合、collect: trueと組み合わせると
 // そのスロットの中身が事実上すべて回収される(=旧来の「出力スロット」相当)。
-// 1台につき最大16件、同じslotIndexのエントリは1つまで。
+// 1台につき最大16件、同じスロットを含むエントリは1つまで(1エントリで複数スロットを指定でき、
+// UI上は「1,2,3」「1-3」「1,3-5,7」のような書式で入力する。ユーザー要望)。補充時は
+// targetAmountを対象スロット数へできるだけ均等に分配する(storageScan.tsのevenSplit参照)。
+// 回収時も同じ分配をそのスロットの「あるべき量」とみなし、超過分をスロットごとに独立して回収する。
 export type PrecisionSlotLine = {
-  slotIndex: number;
+  slotIndices: number[];
   itemTypeId?: string; // targetAmount > 0の時だけ意味を持つ
   itemName?: string;
-  targetAmount: number; // 0 = 目標なし
+  targetAmount: number; // 0 = 目標なし。対象スロット群の合計目標。
   collect: boolean; // 目標外/余剰分をネットワークへ回収するか
 };
 

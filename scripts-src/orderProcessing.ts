@@ -9,7 +9,7 @@ import {
   setOrderCancels,
   setOrders,
 } from "./network";
-import { extractFromStorages, extractFromStoragesIntoSlot } from "./storageScan";
+import { extractFromStorages, extractFromStoragesIntoSlots } from "./storageScan";
 import { generateId, generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
 import {
   getAttachedStorageLocation,
@@ -88,15 +88,23 @@ export function hasPendingOrderFor(
   );
 }
 
-// hasPendingOrderForは品目ベースの判定だが、精密ターミナルの「リスト外スロットの回収」は
-// 送信のたびに品目が変わりうるため、(terminal, slotIndex)ベースで判定する必要がある
-// (precisionTerminalCheck.ts参照)。
-export function hasPendingSlotOrderFor(networkId: string, terminalLoc: Vector3, slotIndex: number): boolean {
+// hasPendingOrderForは品目ベースの判定だが、精密ターミナルの補充は送信のたびに品目が
+// 変わりうるため、(terminal, slotIndices)ベースで判定する必要がある(precisionTerminalCheck.ts
+// 参照)。候補のslotIndicesが既存の未完了ラインのslotIndicesと1つでも重なれば「保留中」とみなす
+// (同じ物理スロットへ複数のラインが同時に搬入を試みることを防ぐため。1エントリが複数スロットを
+// 指定できるようになったことに伴う一般化)。
+export function hasPendingSlotOrderFor(networkId: string, terminalLoc: Vector3, slotIndices: number[]): boolean {
   const pendingOrders = [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
+  const candidates = new Set(slotIndices);
   return pendingOrders.some(
     (order) =>
       locEquals(order.terminal, terminalLoc) &&
-      order.lines.some((line) => line.slotIndex === slotIndex && !line.exhausted && line.delivered < line.requested)
+      order.lines.some(
+        (line) =>
+          !line.exhausted &&
+          line.delivered < line.requested &&
+          (line.slotIndices ?? []).some((s) => candidates.has(s))
+      )
   );
 }
 
@@ -202,17 +210,18 @@ export function processNetworkOrders(network: NetworkData): boolean {
     }
 
     const attempt = Math.min(line.requested - line.delivered, budget);
-    // 精密ターミナルからの依頼(line.slotIndexあり)は指定スロットのみへ搬入する
-    // (storageScan.tsのextractFromStoragesIntoSlot参照)。それ以外は従来通りコンテナのどこでもいい。
+    // 精密ターミナルからの依頼(line.slotIndicesあり)は指定スロット群のみへ、できるだけ均等に
+    // 分配して搬入する(storageScan.tsのextractFromStoragesIntoSlots参照)。それ以外は従来通り
+    // コンテナのどこでもいい。
     const extracted =
-      line.slotIndex !== undefined
-        ? extractFromStoragesIntoSlot(
+      line.slotIndices !== undefined
+        ? extractFromStoragesIntoSlots(
             dimension,
             network,
             { typeId: line.itemTypeId, name: line.itemName },
             attempt,
             destContainer,
-            line.slotIndex
+            line.slotIndices
           )
         : extractFromStorages(
             dimension,

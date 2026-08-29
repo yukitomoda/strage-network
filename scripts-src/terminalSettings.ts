@@ -143,11 +143,17 @@ export function setInventoryAutoDeposit(dimension: Dimension, terminalLoc: Vecto
 }
 
 // 精密ターミナルの「スロットごとのルール」(入力/出力)。他のターミナルは使わない。
+// 1エントリで複数スロットを指定できるようにする(ユーザー要望)以前は、PrecisionSlotLineは
+// slotIndex: number(単一)を持っていた。既存ワールドの保存データはこの旧形式のままなので、
+// 読み込み時にslotIndices: number[]へ変換する(1要素の配列として扱う)。
+type LegacyPrecisionSlotLine = Omit<PrecisionSlotLine, "slotIndices"> & { slotIndex: number };
+
 export function getPrecisionSlots(dimension: Dimension, terminalLoc: Vector3): PrecisionSlotLine[] {
   const raw = findSettingsEntity(dimension, terminalLoc)?.getDynamicProperty(PRECISION_SLOTS_PROPERTY);
   if (typeof raw !== "string") return [];
   try {
-    return JSON.parse(raw) as PrecisionSlotLine[];
+    const parsed = JSON.parse(raw) as (PrecisionSlotLine | LegacyPrecisionSlotLine)[];
+    return parsed.map((line) => ("slotIndices" in line ? line : { ...line, slotIndices: [line.slotIndex] }));
   } catch {
     return [];
   }
