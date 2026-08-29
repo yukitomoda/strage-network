@@ -9,7 +9,6 @@ import {
 import { cancelDeposit } from "./depositProcessing";
 import { cancelOrder } from "./orderProcessing";
 import { cancelOrganize } from "./organizeProcessing";
-import { formatSlotRange } from "./slotRange";
 import { DepositRequest, Order, OrganizeRequest } from "./state";
 import { getTerminalName } from "./terminalSettings";
 
@@ -23,17 +22,15 @@ const ROW_COUNT = 8;
 export const STATUS_REFRESH_INTERVAL_TICKS = 100;
 
 // 引き出し(OrderLine)・預け入れ(DepositLine)は品目ごとの進捗を全く同じ形で持つため、
-// ツールチップ生成もこの共通の形に対して1つだけ書けばよい。slotIndex/slotIndicesは精密
-// ターミナルからのラインのみ持つ(state.ts参照。引き出しは複数スロット対応でslotIndices、
-// 預け入れは従来通り単一スロットのslotIndex)。
+// ツールチップ生成もこの共通の形に対して1つだけ書けばよい。
+// (旧slotIndex/slotIndicesの表示分岐は、25章の広告モデルへの移行で精密ターミナルが
+// キューを経由しなくなったため削除した。)
 type ProgressLine = {
   itemTypeId: string;
   itemName?: string;
   requested: number;
   delivered: number;
   exhausted: boolean;
-  slotIndex?: number;
-  slotIndices?: number[];
 };
 
 // 品目ごとの「配送済み/要求数」を色分けして並べたツールチップ(§書式コードが効くのは
@@ -44,11 +41,6 @@ function progressTooltip(lines: ProgressLine[], cancelHint: string): UIRawMessag
     if (i > 0) parts.push({ text: "\n" });
     const color = line.exhausted ? "§c" : line.delivered >= line.requested ? "§a" : "§e";
     parts.push({ text: `${color}${line.delivered}/${line.requested} ` });
-    if (line.slotIndices !== undefined) {
-      parts.push({ text: `スロット${formatSlotRange(line.slotIndices)}: ` });
-    } else if (line.slotIndex !== undefined) {
-      parts.push({ text: `スロット${line.slotIndex}: ` });
-    }
     parts.push(
       line.itemName ? { text: line.itemName } : { translate: new ItemStack(line.itemTypeId, 1).localizationKey }
     );

@@ -14,17 +14,15 @@ export type NetworkData = {
   observers: Vector3[];
 };
 
+// 「引き出し」(通常のターミナルの手動カート・配達ターミナル)専用。25章の「目標数の要求」
+// (自動端末・在庫管理ターミナル・精密ターミナル・搬入出パッド)はキューを介さず直接搬入出する
+// ようになったため、スロット指定(旧slotIndices)は使われなくなり削除した。
 export type OrderLine = {
   itemTypeId: string;
   itemName?: string; // nameTag(銘)がある場合のみ
   requested: number;
   delivered: number;
   exhausted: boolean;
-  // 精密ターミナル(precisionTerminalCheck.ts)からの依頼のみ指定される。搬入先コンテナの
-  // 「どこでもいい」ではなく指定スロット群へ直接搬入する(storageScan.tsのextractFromStoragesIntoSlots
-  // 参照)。1つのエントリが複数スロットを指定していることがあり、その場合は要求量を各スロットへ
-  // できるだけ均等に分配する(ユーザー要望)。単一スロットなら要素数1の配列になる。
-  slotIndices?: number[];
 };
 
 export type Order = {
@@ -52,16 +50,15 @@ export type PartialResult = {
   shortfall: PartialResultLine[];
 };
 
-// 預け入れ(ターミナルの張り付いた先のストレージ -> ネットワーク内のストレージ群)。
-// 引き出しと対称な構造だが、方向が逆で、スループット等も個別に設定できるよう別系統にする。
+// 「預け入れ」(通常のターミナルの手動カート)専用。OrderLineと同じ理由でスロット指定
+// (旧slotIndex)は削除した(25章)。引き出しと対称な構造だが、方向が逆で、スループット等も
+// 個別に設定できるよう別系統にする。
 export type DepositLine = {
   itemTypeId: string;
   itemName?: string;
   requested: number;
   delivered: number;
   exhausted: boolean;
-  // OrderLine.slotIndexと同じ考え方。精密ターミナルの「リスト外スロットの回収」からのみ指定される。
-  slotIndex?: number;
 };
 
 export type DepositRequest = {

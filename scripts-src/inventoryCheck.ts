@@ -1,138 +1,121 @@
 import { Block, Dimension, Vector3 } from "@minecraft/server";
-import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
-import { startCycleAlignedLoop } from "./networkProcessing";
-import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { getNetworkCatalogCached } from "./networkCatalogCache";
-import { DepositLine, NetworkData, OrderLine, StockTargetLine } from "./state";
-import { CatalogEntry, scanContainerCatalog } from "./storageScan";
-import { getAttachedStorageLocation, INVENTORY_TERMINAL_BLOCK_ID, isRedstoneLocked } from "./terminalBlock";
+import { extractFromStorages, insertIntoStorages, scanContainerCatalog, StorageIndex } from "./storageScan";
+import { getAttachedStorageLocation } from "./terminalBlock";
 import { getInventoryAutoDeposit, getStockTargets } from "./terminalSettings";
+import { NetworkData } from "./state";
 
-// 自動発注・自動預け入れと同じダミー値(autoOrderCheck.tsのAUTO_ORDER_PLAYER_NAME参照)。
-const AUTO_ORDER_PLAYER_NAME = "";
+// 目標系ターミナルの「広告モデル」(25章)。autoOrderCheck.tsと同じ考え方だが、比較基準が
+// アタッチ先の中身ではなくネットワーク全体の在庫数である点が異なる(docs/design.md参照)。
+// ネットワーク在庫が目標を上回っていれば引き出し(ネットワークから減らしてアタッチ先へ)、
+// 下回っていれば預け入れ(アタッチ先から補充してネットワークへ)。
 
-// networkProcessing.tsのstartCycleAlignedLoop参照: 以前は固定100tick(5秒)間隔だったが、
-// コントローラの周期短縮キットのTierに応じたサイクル間隔に検知頻度も追従するようにした。
-export function startInventoryTerminalCheckLoop(): void {
-  startCycleAlignedLoop(checkNetworkInventoryTerminals);
-}
+export function reconcileInventoryTerminalWithdrawal(
+  network: NetworkData,
+  dimension: Dimension,
+  block: Block,
+  budget: number
+): number {
+  if (budget <= 0) return 0;
+  const targets = getStockTargets(dimension, block.location);
+  if (targets.length === 0) return 0;
 
-function checkNetworkInventoryTerminals(network: NetworkData, dimension: Dimension): void {
-  const inventoryTerminals: { loc: Vector3; block: Block }[] = [];
-  for (const loc of network.terminals) {
-    const block = dimension.getBlock(loc);
-    if (block?.isValid && block.typeId === INVENTORY_TERMINAL_BLOCK_ID) {
-      inventoryTerminals.push({ loc, block });
-    }
-  }
-  if (inventoryTerminals.length === 0) return;
+  const attachedLoc = getAttachedStorageLocation(block);
+  const destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+  if (!destContainer) return 0;
 
-  // 自動端末(アタッチ先1個だけをスキャン)と違い、判定にネットワーク全体の在庫数が必要なため、
-  // scanCatalogはコストが高い。このネットワーク分だけ1回スキャンして全ターミナルで使い回す
-  // (depositProcessing.tsのbuildStorageIndexと同じ考え方)。tickをまたいだ重複走査の防止は
-  // networkCatalogCache.ts参照(他の3種の定期チェックとも共有する)。
+  // ネットワーク全体の在庫数が比較基準そのものなので、クランプ用途ではなく本質的に必要
+  // (networkCatalogCache.tsによりtickごとにキャッシュされるため、他のターミナルの
+  // 定期処理と同じtickで重複走査にはならない)。
   const networkCatalog = getNetworkCatalogCached(dimension, network);
 
-  for (const { loc: terminalLoc, block } of inventoryTerminals) {
-    if (isRedstoneLocked(block)) continue;
-
-    const targets = getStockTargets(dimension, terminalLoc);
-    const autoDeposit = getInventoryAutoDeposit(dimension, terminalLoc);
-    if (targets.length === 0 && !autoDeposit) continue;
-
-    if (targets.length > 0) {
-      checkStockTargets(network, terminalLoc, targets, networkCatalog);
-    }
-    if (autoDeposit) {
-      checkUnlistedItems(network, terminalLoc, block, targets);
-    }
-  }
-}
-
-// ネットワーク在庫が目標を上回っていれば引き出し(ネットワークから減らしてアタッチ先へ)、
-// 下回っていれば預け入れ(アタッチ先から補充してネットワークへ)。自動端末のcheckShortfalls/
-// checkExcessと対称な構造だが、比較の基準がアタッチ先の中身ではなくネットワーク全体の
-// 在庫数である点が異なる(docs/design.md参照)。
-function checkStockTargets(
-  network: NetworkData,
-  terminalLoc: Vector3,
-  targets: StockTargetLine[],
-  networkCatalog: CatalogEntry[]
-): void {
-  const orderLines: OrderLine[] = [];
-  const depositLines: DepositLine[] = [];
-
+  let remaining = budget;
+  let consumed = 0;
   for (const target of targets) {
+    if (remaining <= 0) break;
     const current =
-      networkCatalog.find(
-        (e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? "")
-      )?.total ?? 0;
+      networkCatalog.find((e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? ""))
+        ?.total ?? 0;
+    const excess = current - target.targetAmount;
+    if (excess <= 0) continue;
 
-    if (current > target.targetAmount) {
-      const excess = current - target.targetAmount;
-      if (hasPendingOrderFor(network.id, terminalLoc, target.itemTypeId, target.itemName)) continue;
-      orderLines.push({
-        itemTypeId: target.itemTypeId,
-        itemName: target.itemName,
-        requested: excess,
-        delivered: 0,
-        exhausted: false,
-      });
-    } else if (current < target.targetAmount) {
-      const shortfall = target.targetAmount - current;
-      if (hasPendingDepositFor(network.id, terminalLoc, target.itemTypeId, target.itemName)) continue;
-      depositLines.push({
-        itemTypeId: target.itemTypeId,
-        itemName: target.itemName,
-        requested: shortfall,
-        delivered: 0,
-        exhausted: false,
-      });
-    }
-    // current === targetAmount の場合は何もしない(安定状態)。
+    const attempt = Math.min(excess, remaining);
+    const extracted = extractFromStorages(
+      dimension,
+      network,
+      { typeId: target.itemTypeId, name: target.itemName },
+      attempt,
+      destContainer
+    );
+    remaining -= extracted;
+    consumed += extracted;
   }
-
-  if (orderLines.length > 0) {
-    submitOrder(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, orderLines);
-  }
-  if (depositLines.length > 0) {
-    submitDeposit(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, depositLines);
-  }
+  return consumed;
 }
 
-// 自動預け入れ(設定タブのトグル、デフォルトOFF): リストに無い品目がアタッチ先にあれば
-// 全量預け入れる(自動端末のcheckExcessのうち「リストに無い品目」のケースと同じ考え方)。
-// リストにある品目はネットワーク在庫を基準にcheckStockTargetsが別途扱うため、ここでは
-// 対象外にする(二重に預け入れ判定をしないように)。
-function checkUnlistedItems(
+export function reconcileInventoryTerminalDeposit(
   network: NetworkData,
-  terminalLoc: Vector3,
+  dimension: Dimension,
   block: Block,
-  targets: StockTargetLine[]
-): void {
-  const dimension = block.dimension;
+  budget: number,
+  storageIndex?: StorageIndex,
+  depositTargets?: Vector3[]
+): number {
+  if (budget <= 0) return 0;
+  const targets = getStockTargets(dimension, block.location);
+  const autoDeposit = getInventoryAutoDeposit(dimension, block.location);
+  if (targets.length === 0 && !autoDeposit) return 0;
+
   const attachedLoc = getAttachedStorageLocation(block);
   const container = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
-  if (!container) return;
+  if (!container) return 0;
 
-  const depositLines: DepositLine[] = [];
-  for (const entry of scanContainerCatalog(container)) {
-    const isListed = targets.some(
-      (t) => t.itemTypeId === entry.key.typeId && (t.itemName ?? "") === (entry.key.name ?? "")
-    );
-    if (isListed) continue;
-    if (hasPendingDepositFor(network.id, terminalLoc, entry.key.typeId, entry.key.name)) continue;
+  let remaining = budget;
+  let consumed = 0;
 
-    depositLines.push({
-      itemTypeId: entry.key.typeId,
-      itemName: entry.key.name,
-      requested: entry.total,
-      delivered: 0,
-      exhausted: false,
-    });
+  if (targets.length > 0) {
+    const networkCatalog = getNetworkCatalogCached(dimension, network);
+    for (const target of targets) {
+      if (remaining <= 0) break;
+      const current =
+        networkCatalog.find(
+          (e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? "")
+        )?.total ?? 0;
+      const shortfall = target.targetAmount - current;
+      if (shortfall <= 0) continue;
+
+      const attempt = Math.min(shortfall, remaining);
+      const inserted = insertIntoStorages(
+        dimension,
+        network,
+        { typeId: target.itemTypeId, name: target.itemName },
+        attempt,
+        container,
+        storageIndex,
+        depositTargets
+      );
+      remaining -= inserted;
+      consumed += inserted;
+    }
   }
 
-  if (depositLines.length > 0) {
-    submitDeposit(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, depositLines);
+  // 自動預け入れ(設定タブのトグル、デフォルトOFF): リストに無い品目がアタッチ先にあれば
+  // 全量預け入れる。リストにある品目は上のループで既に扱っているため、ここでは対象外にする
+  // (二重に預け入れ判定をしないように)。
+  if (autoDeposit && remaining > 0) {
+    for (const entry of scanContainerCatalog(container)) {
+      if (remaining <= 0) break;
+      const isListed = targets.some(
+        (t) => t.itemTypeId === entry.key.typeId && (t.itemName ?? "") === (entry.key.name ?? "")
+      );
+      if (isListed) continue;
+
+      const attempt = Math.min(entry.total, remaining);
+      const inserted = insertIntoStorages(dimension, network, entry.key, attempt, container, storageIndex, depositTargets);
+      remaining -= inserted;
+      consumed += inserted;
+    }
   }
+
+  return consumed;
 }

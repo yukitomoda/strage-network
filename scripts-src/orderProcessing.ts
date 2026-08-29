@@ -9,14 +9,10 @@ import {
   setOrderCancels,
   setOrders,
 } from "./network";
-import { extractFromStorages, extractFromStoragesIntoSlots } from "./storageScan";
+import { extractFromStorages } from "./storageScan";
 import { generateId, generateOrderId, locEquals, NetworkData, Order, OrderLine, PartialResultLine } from "./state";
-import {
-  getAttachedStorageLocation,
-  isTerminalLikeBlock,
-  DELIVERY_TERMINAL_BLOCK_ID,
-  IO_PAD_BLOCK_ID,
-} from "./terminalBlock";
+import { reconcileAllTargetWithdrawals } from "./targetReconciliation";
+import { getAttachedStorageLocation, isTerminalLikeBlock, DELIVERY_TERMINAL_BLOCK_ID } from "./terminalBlock";
 import { getNotifyOnComplete, getTerminalName } from "./terminalSettings";
 import { CONTROLLER_SPEED_AXIS } from "./controllerAxes";
 import { getAxisTier } from "./upgrade";
@@ -43,7 +39,7 @@ export function submitOrder(networkId: string, terminalLoc: Vector3, playerName:
 }
 
 // コントローラの「状況」タブ(controllerUi.ts)向け: 発行待ち(issuing)・処理中(orders)を
-// 合わせた「まだ完了していない引き出し」一覧。hasPendingOrderForと同じ「両方見る」考え方。
+// 合わせた「まだ完了していない引き出し」一覧。
 export function listActiveOrders(networkId: string): Order[] {
   return [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
 }
@@ -63,49 +59,6 @@ export function hasActiveDeliveryOrderFor(playerName: string): boolean {
     }
   }
   return false;
-}
-
-// 直前のチェックで出した引き出しがまだ処理中(発行待ち含む)なら、同じ品目を二重に引き出し
-// しないための判定。自動端末(autoOrderCheck.ts)・在庫管理ターミナル(inventoryCheck.ts)の
-// どちらの定期チェックからも使う共通処理なのでここに置いている。
-export function hasPendingOrderFor(
-  networkId: string,
-  terminalLoc: Vector3,
-  itemTypeId: string,
-  itemName: string | undefined
-): boolean {
-  const pendingOrders = [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
-  return pendingOrders.some(
-    (order) =>
-      locEquals(order.terminal, terminalLoc) &&
-      order.lines.some(
-        (line) =>
-          line.itemTypeId === itemTypeId &&
-          (line.itemName ?? "") === (itemName ?? "") &&
-          !line.exhausted &&
-          line.delivered < line.requested
-      )
-  );
-}
-
-// hasPendingOrderForは品目ベースの判定だが、精密ターミナルの補充は送信のたびに品目が
-// 変わりうるため、(terminal, slotIndices)ベースで判定する必要がある(precisionTerminalCheck.ts
-// 参照)。候補のslotIndicesが既存の未完了ラインのslotIndicesと1つでも重なれば「保留中」とみなす
-// (同じ物理スロットへ複数のラインが同時に搬入を試みることを防ぐため。1エントリが複数スロットを
-// 指定できるようになったことに伴う一般化)。
-export function hasPendingSlotOrderFor(networkId: string, terminalLoc: Vector3, slotIndices: number[]): boolean {
-  const pendingOrders = [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
-  const candidates = new Set(slotIndices);
-  return pendingOrders.some(
-    (order) =>
-      locEquals(order.terminal, terminalLoc) &&
-      order.lines.some(
-        (line) =>
-          !line.exhausted &&
-          line.delivered < line.requested &&
-          (line.slotIndices ?? []).some((s) => candidates.has(s))
-      )
-  );
 }
 
 // requestId(厳密な一意ID。表示用の緩いidとは別物)を指定して引き出しをキャンセルする。
@@ -177,28 +130,19 @@ export function processNetworkOrders(network: NetworkData): boolean {
     }
 
     // 搬入先はターミナルが張り付いている面(wh:facing)の先のブロック。毎回動的に見る。
-    let destContainer;
-    if (terminalBlock.typeId === IO_PAD_BLOCK_ID) {
-      // 搬入出パッド: 張り付いた先という概念が無く、パッドの上に乗っているプレイヤー
-      // (padCheck.tsが発注時にorder.playerNameへ入れている)のインベントリが搬入先になる。
-      // 配達ターミナルと違い代替の搬入先が無いため、そのプレイヤーが見つからなければ
-      // (ログアウト・パッドから離れた等)destContainerはundefinedのままになり、下の
-      // if(!destContainer)の「搬入先が無い」処理(shortfallとして確定)にそのまま乗る。
-      const targetPlayer = world.getPlayers().find((p) => p.name === order.playerName);
-      destContainer = targetPlayer?.getComponent("inventory")?.container;
-    } else {
-      const attachedLoc = getAttachedStorageLocation(terminalBlock);
-      destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+    // (搬入出パッドは25章の広告モデルへ移行済みで、FIFOキュー(=ここ)に乗ることは無い。
+    // 張り付いた先という概念が無いパッド専用の分岐は不要になったため削除した。)
+    const attachedLoc = getAttachedStorageLocation(terminalBlock);
+    let destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
 
-      // 配達ターミナル: 注文したプレイヤーがオンラインなら、位置に関わらずインベントリへ優先的に
-      // 届ける(右クリックしないと注文できない=注文した時点で必ず正面にいたことが保証されているため、
-      // 配送時点の位置判定は行わない、という設計判断。docs/design.md参照)。オフラインなら従来通り
-      // 張り付いた先のストレージへ(=通常のターミナルと同じ基本動作)。
-      if (terminalBlock.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
-        const orderingPlayer = world.getPlayers().find((p) => p.name === order.playerName);
-        const playerContainer = orderingPlayer?.getComponent("inventory")?.container;
-        if (playerContainer) destContainer = playerContainer;
-      }
+    // 配達ターミナル: 注文したプレイヤーがオンラインなら、位置に関わらずインベントリへ優先的に
+    // 届ける(右クリックしないと注文できない=注文した時点で必ず正面にいたことが保証されているため、
+    // 配送時点の位置判定は行わない、という設計判断。docs/design.md参照)。オフラインなら従来通り
+    // 張り付いた先のストレージへ(=通常のターミナルと同じ基本動作)。
+    if (terminalBlock.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+      const orderingPlayer = world.getPlayers().find((p) => p.name === order.playerName);
+      const playerContainer = orderingPlayer?.getComponent("inventory")?.container;
+      if (playerContainer) destContainer = playerContainer;
     }
 
     if (!destContainer) {
@@ -210,26 +154,13 @@ export function processNetworkOrders(network: NetworkData): boolean {
     }
 
     const attempt = Math.min(line.requested - line.delivered, budget);
-    // 精密ターミナルからの依頼(line.slotIndicesあり)は指定スロット群のみへ、できるだけ均等に
-    // 分配して搬入する(storageScan.tsのextractFromStoragesIntoSlots参照)。それ以外は従来通り
-    // コンテナのどこでもいい。
-    const extracted =
-      line.slotIndices !== undefined
-        ? extractFromStoragesIntoSlots(
-            dimension,
-            network,
-            { typeId: line.itemTypeId, name: line.itemName },
-            attempt,
-            destContainer,
-            line.slotIndices
-          )
-        : extractFromStorages(
-            dimension,
-            network,
-            { typeId: line.itemTypeId, name: line.itemName },
-            attempt,
-            destContainer
-          );
+    const extracted = extractFromStorages(
+      dimension,
+      network,
+      { typeId: line.itemTypeId, name: line.itemName },
+      attempt,
+      destContainer
+    );
     line.delivered += extracted;
     budget -= extracted;
     if (extracted > 0) anyDelivered = true;
@@ -241,6 +172,13 @@ export function processNetworkOrders(network: NetworkData): boolean {
     setOrders(network.id, orders); // ラインを1つ処理するたびに書き戻す
 
     if (budget <= 0) break;
+  }
+
+  // 目標系(自動端末/在庫管理ターミナル/精密ターミナル/搬入出パッド)は、固定量の「引き出し」
+  // FIFOを消化した残り予算で直接処理する(広告モデル、25章)。
+  if (budget > 0) {
+    const delivered = reconcileAllTargetWithdrawals(network, dimension, budget);
+    if (delivered > 0) anyDelivered = true;
   }
 
   return anyDelivered;
@@ -286,16 +224,12 @@ function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order)
   );
 
   // 配達ターミナルはチャットのメッセージが見落とされやすいという指摘を受け、アクションバーにも
-  // 完了を表示する(進捗表示と同じ通知トグルに乗せ、専用の設定は増やさない)。搬入出パッドも
-  // ioPadProgress.tsの進捗表示に続けて完了を表示する(ユーザー要望)。
-  const terminalTypeId = dimension.getBlock(order.terminal)?.typeId;
-  if (terminalTypeId === DELIVERY_TERMINAL_BLOCK_ID) {
+  // 完了を表示する(進捗表示と同じ通知トグルに乗せ、専用の設定は増やさない)。
+  // (搬入出パッドは25章の広告モデルへ移行済みでfinalizeOrderを経由しないため、対応する
+  // アクションバー通知はioPadProgress.ts側のライブ比較表示に統合した。)
+  if (dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
     player.onScreenDisplay.setActionBar(
       shortfall.length > 0 ? "§e配達完了(一部不足があります)" : "§a配達完了!"
-    );
-  } else if (terminalTypeId === IO_PAD_BLOCK_ID) {
-    player.onScreenDisplay.setActionBar(
-      shortfall.length > 0 ? "§e搬出完了(一部不足があります)" : "§a搬出完了!"
     );
   }
 }

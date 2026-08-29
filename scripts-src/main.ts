@@ -1,19 +1,15 @@
 import { system } from "@minecraft/server";
 import { autoTerminalBlockComponent } from "./autoTerminalBlock";
-import { startAutoTerminalCheckLoop } from "./autoOrderCheck";
 import { controllerBlockComponent } from "./controllerBlock";
-import { startInventoryTerminalCheckLoop } from "./inventoryCheck";
 import { inventoryTerminalBlockComponent } from "./inventoryTerminalBlock";
 import { startItemDescriptionWatcher } from "./itemDescriptions";
 import { networkObserverBlockComponent } from "./networkObserverBlock";
 import { startNetworkProcessingLoop } from "./networkProcessing";
 import { precisionTerminalBlockComponent } from "./precisionTerminalBlock";
-import { startPrecisionTerminalCheckLoop } from "./precisionTerminalCheck";
 import { deliveryTerminalBlockComponent } from "./deliveryTerminalBlock";
 import { startDeliveryProgressLoop } from "./deliveryProgress";
 import { ioPadBlockComponent } from "./ioPadBlock";
 import { startPadProgressLoop } from "./ioPadProgress";
-import { startPadCheckLoop } from "./padCheck";
 import { registerStorageBreakWatcher } from "./storageLifecycle";
 import { testFillerItemComponent } from "./testFiller";
 import { terminalBlockComponent } from "./terminalBlock";
@@ -36,12 +32,11 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRe
 
 registerStorageBreakWatcher();
 registerWrenchPlayerLeaveWatcher();
+// 自動端末/在庫管理ターミナル/精密ターミナル/搬入出パッドの定期チェックループは、25章の
+// 広告モデルへの移行により、startNetworkProcessingLoop(processNetworkOrders/
+// processNetworkDeposits)に統合された。専用のstartXCheckLoopは廃止した。
 startNetworkProcessingLoop();
 startWrenchHighlightLoop();
-startAutoTerminalCheckLoop();
-startInventoryTerminalCheckLoop();
-startPrecisionTerminalCheckLoop();
 startDeliveryProgressLoop();
-startPadCheckLoop();
 startPadProgressLoop();
 startItemDescriptionWatcher();

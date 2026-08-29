@@ -1,51 +1,66 @@
-import { system, world } from "@minecraft/server";
+import { ItemStack, RawMessage, system, world } from "@minecraft/server";
 import { CONTROLLER_CYCLE_AXIS } from "./controllerAxes";
-import { getAllNetworks, getDepositIssuing, getDeposits, getIssuing, getOrders } from "./network";
+import { getAllNetworks } from "./network";
 import { getCycleIntervalTicks } from "./networkProcessing";
+import { playersStandingOn } from "./padCheck";
+import { PadTargetLine } from "./state";
+import { CatalogEntry, scanContainerCatalog } from "./storageScan";
+import { getPadTargets } from "./terminalSettings";
 import { IO_PAD_BLOCK_ID } from "./terminalBlock";
 import { getAxisMaxTier } from "./upgrade";
 
-// deliveryProgress.tsと同じ理由・同じ間隔(周期軸の最速Tierの間隔)でアクションバーの進捗表示を
-// 更新する。搬入出パッドは「搬出のみ」「搬入のみ」だけでなく「搬入出」モードで両方向のキューを
-// 同時に持ちうる(配達ターミナルは常に引き出し=搬出方向のみ)ため、プレイヤーごとに搬出/搬入の
-// 行をまとめてから1回のsetActionBarで表示する(別々に呼ぶと後勝ちで片方が消えてしまうため)。
+// 25章の広告モデルへの移行により、搬入出パッドの搬入出はOrder/DepositRequestのキューを
+// 経由しなくなったため、以前のように delivered/requested を読んで進捗を出すことができなくなった。
+// 代わりに、targetReconciliation.tsの実際の判定(目標 vs 現在の所持数)と同じ比較を表示専用に
+// 行う(このループ自体は搬入出を行わない、読み取りのみ)。deliveryProgress.tsと同じ理由・同じ
+// 間隔(周期軸の最速Tierの間隔)で更新する。
 const PROGRESS_INTERVAL_TICKS = getCycleIntervalTicks(getAxisMaxTier(CONTROLLER_CYCLE_AXIS));
 
 export function startPadProgressLoop(): void {
   system.runInterval(() => {
     for (const network of getAllNetworks()) {
       const dimension = world.getDimension(network.dimensionId);
-      const activeOrders = [...getIssuing(network.id).map((entry) => entry.order), ...getOrders(network.id)];
-      const activeDeposits = [
-        ...getDepositIssuing(network.id).map((entry) => entry.request),
-        ...getDeposits(network.id),
-      ];
 
-      const linesByPlayer = new Map<string, string[]>();
+      for (const loc of network.terminals) {
+        const block = dimension.getBlock(loc);
+        if (!block?.isValid || block.typeId !== IO_PAD_BLOCK_ID) continue;
 
-      for (const order of activeOrders) {
-        if (dimension.getBlock(order.terminal)?.typeId !== IO_PAD_BLOCK_ID) continue;
-        const requested = order.lines.reduce((sum, l) => sum + l.requested, 0);
-        const delivered = order.lines.reduce((sum, l) => sum + l.delivered, 0);
-        const lines = linesByPlayer.get(order.playerName) ?? [];
-        lines.push(`§a搬出中... ${delivered}/${requested}個`);
-        linesByPlayer.set(order.playerName, lines);
-      }
+        const targets = getPadTargets(dimension, loc);
+        if (targets.length === 0) continue;
 
-      for (const request of activeDeposits) {
-        if (dimension.getBlock(request.terminal)?.typeId !== IO_PAD_BLOCK_ID) continue;
-        const requested = request.lines.reduce((sum, l) => sum + l.requested, 0);
-        const delivered = request.lines.reduce((sum, l) => sum + l.delivered, 0);
-        const lines = linesByPlayer.get(request.playerName) ?? [];
-        lines.push(`§b搬入中... ${delivered}/${requested}個`);
-        linesByPlayer.set(request.playerName, lines);
-      }
+        for (const player of playersStandingOn(dimension, loc)) {
+          const inventory = player.getComponent("inventory")?.container;
+          if (!inventory) continue;
 
-      for (const [playerName, lines] of linesByPlayer) {
-        const player = world.getPlayers().find((p) => p.name === playerName);
-        if (!player) continue; // オフライン等。オンライン中のみ表示(deliveryProgress.tsと同じMVP方針)。
-        player.onScreenDisplay.setActionBar(lines.join("\n"));
+          const message = buildStatusMessage(targets, scanContainerCatalog(inventory));
+          if (message) player.onScreenDisplay.setActionBar(message);
+        }
       }
     }
   }, PROGRESS_INTERVAL_TICKS);
+}
+
+// 目標に達していない品目を「現在N/目標M 品名」の行として並べる(不足=§a、超過=§b、旧来の
+// 「搬出中」「搬入中」の色分けを踏襲)。全品目が目標通りなら何も表示しない(undefined)。
+function buildStatusMessage(targets: PadTargetLine[], catalog: CatalogEntry[]): (RawMessage | string)[] | undefined {
+  const parts: (RawMessage | string)[] = [];
+
+  for (const target of targets) {
+    const entry = catalog.find(
+      (e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? "")
+    );
+    const current = entry?.total ?? 0;
+    if (current === target.targetAmount) continue;
+
+    if (parts.length > 0) parts.push("\n");
+    const color = current < target.targetAmount ? "§a" : "§b";
+    parts.push(`${color}${current}/${target.targetAmount} `);
+    parts.push(
+      target.itemName
+        ? { text: target.itemName }
+        : { translate: entry?.localizationKey ?? new ItemStack(target.itemTypeId, 1).localizationKey }
+    );
+  }
+
+  return parts.length > 0 ? parts : undefined;
 }

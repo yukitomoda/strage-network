@@ -346,9 +346,11 @@ export function setOrderCancels(networkId: string, requestIds: string[]): void {
 
 // 「不足」記録は現状どのUIからも読み出されていない(将来のUI表示のための記録、8/9章参照)が、
 // 上限なくpushし続けると動的プロパティの1件あたり文字数上限(32767)をいずれ超えて例外になる
-// (実機で発見。自動端末等の定期チェックが慢性的な品薄品目に対して5秒おきに新しい引き出しを
-// 発行し続けると、finalizeOrderのたびに際限なく積み上がる)。直近PARTIAL_HISTORY_LIMIT件だけ
-// 保持するローリングウィンドウにして上限を防ぐ。
+// (実機で発見。当時は自動端末等の定期チェックが慢性的な品薄品目に対して5秒おきに新しい
+// 引き出しを発行し続け、finalizeOrderのたびに際限なく積み上がっていた。25章の広告モデルへの
+// 移行後、目標系はfinalizeOrderを経由しなくなったためこの発生源は無くなったが、引き出し/
+// 預け入れ(手動カート・配達ターミナル)側の記録は引き続きこの上限で保護する)。直近
+// PARTIAL_HISTORY_LIMIT件だけ保持するローリングウィンドウにして上限を防ぐ。
 const PARTIAL_HISTORY_LIMIT = 20;
 
 export function getPartial(networkId: string): PartialResult[] {

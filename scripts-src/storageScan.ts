@@ -280,29 +280,84 @@ function countAvailable(dimension: Dimension, network: NetworkData, key: Display
   return Math.min(total, cap);
 }
 
+// current(各スロットの現在値)を、cap(各スロットの上限)を超えない範囲で、現在最も少ない
+// スロットから順に水準を合わせながらavailable個だけ引き上げる(water-filling)。単純に
+// 「動かす量をスロット数で均等割り」すると、既にスロットごとに残量が異なる状態(前回のサイクルで
+// 一部だけ届いた等)では、残量に関係なく先頭スロットから機械的に配分してしまい、特定のスロットが
+// 上限を超えて積まれ続け、回収(reconcileSlotGroupDeposit)がそれを削って戻す、を繰り返す
+// 振動が起きていた(実機で発見)。この関数は常に「現在の残量」を起点に配分するため、既に
+// 上限に達しているスロットへは追加せず、不足しているスロット同士でavailableをできるだけ
+// 均等に分け合う。
+function levelFill(current: number[], cap: number[], available: number): number[] {
+  const n = current.length;
+  const added = new Array(n).fill(0);
+  let remaining = available;
+
+  while (remaining > 0) {
+    let minLevel = Infinity;
+    const candidates: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const level = current[i] + added[i];
+      if (level >= cap[i]) continue; // 既に上限
+      candidates.push(i);
+      if (level < minLevel) minLevel = level;
+    }
+    if (candidates.length === 0) break; // 全スロットが上限に達した
+
+    // 最も少ないスロット群(atMin)を、次の壁(それより高いスロットの現在値、または各スロットの
+    // 上限のうち最も近いもの)まで一斉に引き上げる。
+    const atMin = candidates.filter((i) => current[i] + added[i] === minLevel);
+    let nextWall = Infinity;
+    for (const i of candidates) {
+      const level = current[i] + added[i];
+      if (level > minLevel) nextWall = Math.min(nextWall, level);
+    }
+    for (const i of atMin) nextWall = Math.min(nextWall, cap[i]);
+
+    const step = nextWall - minLevel;
+    const needed = step * atMin.length;
+    if (needed <= remaining) {
+      for (const i of atMin) added[i] += step;
+      remaining -= needed;
+    } else {
+      // 全員を壁まで引き上げるには足りない: atMinの中でできるだけ均等に分ける
+      // (端数はインデックス順で先頭から+1、evenSplitと同じ考え方)。
+      const per = Math.floor(remaining / atMin.length);
+      let extra = remaining % atMin.length;
+      for (const i of atMin) {
+        added[i] += per + (extra > 0 ? 1 : 0);
+        if (extra > 0) extra--;
+      }
+      remaining = 0;
+    }
+  }
+  return added;
+}
+
 // 精密ターミナルの複数スロット指定(1エントリで複数スロットを維持する機能。ユーザー要望)専用。
-// 単純に先頭のスロットから満たしていくと、ネットワーク在庫が要求量に足りない場合に後方の
-// スロットだけ0のまま、という偏った結果になってしまう(例: 3スロットに10個ずつ要求しているのに
-// 在庫が20個しか無い場合、10,10,0になってしまう)。そこで先に「実際に取り出せる総量」を
-// countAvailableで確定させてから、evenSplitで各スロットへの配分量を決め、1スロットずつ
-// extractFromStoragesIntoSlotを呼ぶ(例: 20個を3スロットに配分 -> 7,7,6)。各スロットの
-// 空き容量(スタック上限)によっては配分通りに届かないことがあるが、それは物理的な制約として
-// 許容する(「可能な限り均等に分配する」というユーザー要望の通り)。
+// capは各スロットの「あるべき量」上限(呼び出し元がevenSplit(targetAmount, スロット数)で
+// 求めたもの。回収側(precisionTerminalCheck.tsのreconcileSlotGroupDeposit)と同じ計算式を
+// 共有する)。各スロットの現在値をlevelFillで水準合わせしながら配分することで、既に一部が
+// 埋まっている状態でも(前回のサイクルで一部だけ届いた場合など)正しく収束する(単純な
+// 「動かす量を均等割り」では振動する不具合があった。levelFill参照)。
 export function extractFromStoragesIntoSlots(
   dimension: Dimension,
   network: NetworkData,
   key: DisplayKey,
-  amount: number,
+  cap: number[],
+  budget: number,
   destContainer: Container,
   slotIndices: number[]
 ): number {
-  if (slotIndices.length === 0) return 0;
-  if (slotIndices.length === 1) {
-    return extractFromStoragesIntoSlot(dimension, network, key, amount, destContainer, slotIndices[0]);
-  }
+  if (slotIndices.length === 0 || budget <= 0) return 0;
 
-  const available = countAvailable(dimension, network, key, amount);
-  const allocations = evenSplit(available, slotIndices.length);
+  const current = slotIndices.map((slotIndex) => destContainer.getItem(slotIndex)?.amount ?? 0);
+  const totalNeed = current.reduce((sum, c, i) => sum + Math.max(0, cap[i] - c), 0);
+  if (totalNeed <= 0) return 0;
+
+  const attempt = Math.min(totalNeed, budget);
+  const available = countAvailable(dimension, network, key, attempt);
+  const allocations = levelFill(current, cap, available);
 
   let delivered = 0;
   for (let i = 0; i < slotIndices.length; i++) {

@@ -1,27 +1,19 @@
-import { Dimension, Player, Vector3 } from "@minecraft/server";
-import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
-import { getNetworkCatalogCached } from "./networkCatalogCache";
-import { startCycleAlignedLoop } from "./networkProcessing";
-import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
-import { CatalogEntry, scanContainerCatalog } from "./storageScan";
-import { DepositLine, NetworkData, OrderLine, PadMode, PadTargetLine } from "./state";
+import { Block, Container, Dimension, Player, Vector3 } from "@minecraft/server";
+import { extractFromStorages, insertIntoStorages, scanContainerCatalog, StorageIndex } from "./storageScan";
 import { getPadMode, getPadTargets } from "./terminalSettings";
-import { IO_PAD_BLOCK_ID, isRedstoneLocked } from "./terminalBlock";
+import { NetworkData, PadTargetLine } from "./state";
 
-// networkProcessing.tsのstartCycleAlignedLoop参照: 以前は固定100tick(5秒)間隔だったが、
-// コントローラの周期短縮キットのTierに応じたサイクル間隔に検知頻度も追従するようにした
-// (ユーザー指摘: パッドに乗ってから搬入出が始まるまでのラグの一因だった)。
-export function startPadCheckLoop(): void {
-  startCycleAlignedLoop(checkNetworkPads);
-}
+// 目標系ターミナルの「広告モデル」(25章)。搬入出パッドはモード("both"/"deposit_only"/
+// "withdraw_only")に応じて片方向または両方向に過不足を解消する(在庫管理ターミナルの
+// reconcileInventoryTerminalWithdrawal/Depositと同じ発想)。既にプレイヤーのインベントリ
+// Containerを手にしているため、他の3種と違い搬入先解決の間接参照(order.playerNameからの
+// 再検索)を経由しない。
 
 // dimension.getPlayersは球状の近傍検索(maxDistanceによる絞り込み)しかできないため、
 // 候補を広めに取ってから、パッドのXZセル内・Y方向は「パッドの上に乗っている」とみなせる
-// 範囲(足元がblock.y+1付近、ジャンプ等での多少の浮きは許容)に厳密に絞り込む。このアドオンで
-// 「プレイヤーが特定のブロックの上に乗っているか」を判定条件に使うのは搬入出パッドが初めて
-// (既存のlocEqualsはブロック座標同士の一致判定のみを想定しており、プレイヤーの連続座標には
-// 使えない)。
-function playersStandingOn(dimension: Dimension, loc: Vector3): Player[] {
+// 範囲(足元がblock.y+1付近、ジャンプ等での多少の浮きは許容)に厳密に絞り込む。
+// ioPadProgress.tsの表示専用ライブ比較からも同じ判定を使うためexportしている。
+export function playersStandingOn(dimension: Dimension, loc: Vector3): Player[] {
   const candidates = dimension.getPlayers({
     location: { x: loc.x + 0.5, y: loc.y + 1, z: loc.z + 0.5 },
     maxDistance: 1.5,
@@ -32,94 +24,122 @@ function playersStandingOn(dimension: Dimension, loc: Vector3): Player[] {
   });
 }
 
-function checkNetworkPads(network: NetworkData, dimension: Dimension): void {
-  for (const padLoc of network.terminals) {
-    const block = dimension.getBlock(padLoc);
-    if (!block?.isValid || block.typeId !== IO_PAD_BLOCK_ID) continue;
-    if (isRedstoneLocked(block)) continue;
-
-    const targets = getPadTargets(dimension, padLoc);
-    if (targets.length === 0) continue;
-
-    const mode = getPadMode(dimension, padLoc);
-    for (const player of playersStandingOn(dimension, padLoc)) {
-      const inventory = player.getComponent("inventory")?.container;
-      if (!inventory) continue;
-      checkPlayer(network, dimension, padLoc, player.name, mode, targets, scanContainerCatalog(inventory));
-    }
-  }
-}
-
-// 目標(所持数)との過不足を、パッドのモードに応じて片方向または両方向に解消する。
-// - "both": 超過分は預け入れ、不足分は引き出し(在庫管理ターミナルのcheckStockTargetsと同じ発想)。
-// - "deposit_only": 超過分の預け入れのみ(不足があっても引き出さない)。
-// - "withdraw_only": 不足分の引き出しのみ(超過があっても預け入れない)。
-// submitOrder/submitDepositのplayerNameには実際に乗っているプレイヤーの名前を渡す。自動端末等の
-// 匿名チェック(空文字列)と違い、orderProcessing.ts/depositProcessing.tsが搬入出先(=このプレイヤーの
-// インベントリ)を解決する際にplayerNameから本人を再検索するため、ここで正しく持たせる必要がある。
-function checkPlayer(
+export function reconcileIoPadWithdrawal(
   network: NetworkData,
   dimension: Dimension,
-  padLoc: Vector3,
-  playerName: string,
-  mode: PadMode,
-  targets: PadTargetLine[],
-  catalog: CatalogEntry[]
-): void {
-  const depositLines: DepositLine[] = [];
-  // 引き出し候補はいったん集める。ネットワーク在庫の確認(scanCatalog、コストが高い)は
-  // 候補が実際にある時だけ行いたいため(autoOrderCheck.tsのcheckShortfallsと同じ理由)。
-  const orderCandidates: { target: PadTargetLine; shortfall: number }[] = [];
+  block: Block,
+  budget: number
+): number {
+  if (budget <= 0) return 0;
+  const targets = getPadTargets(dimension, block.location);
+  if (targets.length === 0) return 0;
+  const mode = getPadMode(dimension, block.location);
+  if (mode === "deposit_only") return 0;
 
+  let remaining = budget;
+  let consumed = 0;
+  for (const player of playersStandingOn(dimension, block.location)) {
+    if (remaining <= 0) break;
+    const inventory = player.getComponent("inventory")?.container;
+    if (!inventory) continue;
+    const delivered = reconcilePlayerWithdrawal(network, dimension, inventory, targets, remaining);
+    remaining -= delivered;
+    consumed += delivered;
+  }
+  return consumed;
+}
+
+function reconcilePlayerWithdrawal(
+  network: NetworkData,
+  dimension: Dimension,
+  inventory: Container,
+  targets: PadTargetLine[],
+  budget: number
+): number {
+  const catalog = scanContainerCatalog(inventory);
+  let remaining = budget;
+  let consumed = 0;
   for (const target of targets) {
+    if (remaining <= 0) break;
     const current =
       catalog.find((e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? ""))
         ?.total ?? 0;
+    const shortfall = target.targetAmount - current;
+    if (shortfall <= 0) continue;
 
-    if (current > target.targetAmount && mode !== "withdraw_only") {
-      const excess = current - target.targetAmount;
-      if (hasPendingDepositFor(network.id, padLoc, target.itemTypeId, target.itemName)) continue;
-      depositLines.push({
-        itemTypeId: target.itemTypeId,
-        itemName: target.itemName,
-        requested: excess,
-        delivered: 0,
-        exhausted: false,
-      });
-    } else if (current < target.targetAmount && mode !== "deposit_only") {
-      const shortfall = target.targetAmount - current;
-      if (hasPendingOrderFor(network.id, padLoc, target.itemTypeId, target.itemName)) continue;
-      orderCandidates.push({ target, shortfall });
-    }
-    // current === targetAmount の場合は何もしない(安定状態)。
+    const attempt = Math.min(shortfall, remaining);
+    const extracted = extractFromStorages(
+      dimension,
+      network,
+      { typeId: target.itemTypeId, name: target.itemName },
+      attempt,
+      inventory
+    );
+    remaining -= extracted;
+    consumed += extracted;
   }
+  return consumed;
+}
 
-  const orderLines: OrderLine[] = [];
-  if (orderCandidates.length > 0) {
-    // ネットワークに実際に無い(または明らかに足りない)品目は注文しない(autoOrderCheck.tsの
-    // checkShortfallsと同じ理由・同じ手法。ユーザー要望)。
-    const networkCatalog = getNetworkCatalogCached(dimension, network);
-    for (const { target, shortfall } of orderCandidates) {
-      const availableInNetwork =
-        networkCatalog.find(
-          (e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? "")
-        )?.total ?? 0;
-      const requestAmount = Math.min(shortfall, availableInNetwork);
-      if (requestAmount <= 0) continue;
-      orderLines.push({
-        itemTypeId: target.itemTypeId,
-        itemName: target.itemName,
-        requested: requestAmount,
-        delivered: 0,
-        exhausted: false,
-      });
-    }
-  }
+export function reconcileIoPadDeposit(
+  network: NetworkData,
+  dimension: Dimension,
+  block: Block,
+  budget: number,
+  storageIndex?: StorageIndex,
+  depositTargets?: Vector3[]
+): number {
+  if (budget <= 0) return 0;
+  const targets = getPadTargets(dimension, block.location);
+  if (targets.length === 0) return 0;
+  const mode = getPadMode(dimension, block.location);
+  if (mode === "withdraw_only") return 0;
 
-  if (orderLines.length > 0) {
-    submitOrder(network.id, padLoc, playerName, orderLines);
+  let remaining = budget;
+  let consumed = 0;
+  for (const player of playersStandingOn(dimension, block.location)) {
+    if (remaining <= 0) break;
+    const inventory = player.getComponent("inventory")?.container;
+    if (!inventory) continue;
+    const delivered = reconcilePlayerDeposit(network, dimension, inventory, targets, remaining, storageIndex, depositTargets);
+    remaining -= delivered;
+    consumed += delivered;
   }
-  if (depositLines.length > 0) {
-    submitDeposit(network.id, padLoc, playerName, depositLines);
+  return consumed;
+}
+
+function reconcilePlayerDeposit(
+  network: NetworkData,
+  dimension: Dimension,
+  inventory: Container,
+  targets: PadTargetLine[],
+  budget: number,
+  storageIndex: StorageIndex | undefined,
+  depositTargets: Vector3[] | undefined
+): number {
+  const catalog = scanContainerCatalog(inventory);
+  let remaining = budget;
+  let consumed = 0;
+  for (const target of targets) {
+    if (remaining <= 0) break;
+    const current =
+      catalog.find((e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? ""))
+        ?.total ?? 0;
+    const excess = current - target.targetAmount;
+    if (excess <= 0) continue;
+
+    const attempt = Math.min(excess, remaining);
+    const inserted = insertIntoStorages(
+      dimension,
+      network,
+      { typeId: target.itemTypeId, name: target.itemName },
+      attempt,
+      inventory,
+      storageIndex,
+      depositTargets
+    );
+    remaining -= inserted;
+    consumed += inserted;
   }
+  return consumed;
 }

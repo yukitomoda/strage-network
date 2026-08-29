@@ -1,125 +1,90 @@
-import { Dimension, Vector3 } from "@minecraft/server";
-import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
-import { getNetworkCatalogCached } from "./networkCatalogCache";
-import { startCycleAlignedLoop } from "./networkProcessing";
-import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
-import { CatalogEntry, scanContainerCatalog } from "./storageScan";
-import { AUTO_TERMINAL_BLOCK_ID, getAttachedStorageLocation, isRedstoneLocked } from "./terminalBlock";
+import { Block, Dimension, Vector3 } from "@minecraft/server";
+import { extractFromStorages, insertIntoStorages, scanContainerCatalog, StorageIndex } from "./storageScan";
+import { getAttachedStorageLocation } from "./terminalBlock";
 import { getAutoDeposit, getWishlist } from "./terminalSettings";
-import { DepositLine, NetworkData, OrderLine, WishlistLine } from "./state";
+import { NetworkData, WishlistLine } from "./state";
 
-// 自動発注・自動預け入れには送信元プレイヤーが存在しないため、空文字列にしておく
-// (引き出しの完了通知は既定でOFFだが、後からONにしても通知先が見つからず実害が無いように。
-// コントローラUIの「状況」タブでも、空文字列は「自動」として表示される)。
-const AUTO_ORDER_PLAYER_NAME = "";
-
-// networkProcessing.tsのstartCycleAlignedLoop参照: 以前は固定100tick(5秒)間隔だったが、
-// コントローラの周期短縮キットのTierに応じたサイクル間隔に検知頻度も追従するようにした。
-export function startAutoTerminalCheckLoop(): void {
-  startCycleAlignedLoop(checkNetworkAutoTerminals);
-}
-
-function checkNetworkAutoTerminals(network: NetworkData, dimension: Dimension): void {
-  for (const terminalLoc of network.terminals) {
-    const block = dimension.getBlock(terminalLoc);
-    if (!block?.isValid || block.typeId !== AUTO_TERMINAL_BLOCK_ID) continue;
-    if (isRedstoneLocked(block)) continue;
-
-    const wishlist = getWishlist(dimension, terminalLoc);
-    const autoDeposit = getAutoDeposit(dimension, terminalLoc);
-    if (wishlist.length === 0 && !autoDeposit) continue;
-
-    const attachedLoc = getAttachedStorageLocation(block);
-    const container = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
-    const catalog = container ? scanContainerCatalog(container) : [];
-
-    if (wishlist.length > 0) {
-      checkShortfalls(network, dimension, terminalLoc, wishlist, catalog);
-    }
-    if (autoDeposit) {
-      checkExcess(network, terminalLoc, wishlist, catalog);
-    }
-  }
-}
+// 目標系ターミナルの「広告モデル」(25章、ユーザー提案)。以前はここでshortfall/excessを
+// 計算して`submitOrder`/`submitDeposit`でキューに積んでいたが、今は`targetReconciliation.ts`の
+// ディスパッチャから直接呼ばれ、共有予算(budget)の範囲内でその場で搬入出まで行う。
+// 戻り値は実際に消費した予算(=実際に動かした個数)。レッドストーンロックの判定は
+// targetReconciliation.ts側で共通に行うため、ここでは行わない。
 
 // 目標を下回っている品目を引き出しする(従来の「自動引き出し」相当)。
-function checkShortfalls(
+export function reconcileAutoTerminalWithdrawal(
   network: NetworkData,
   dimension: Dimension,
-  terminalLoc: Vector3,
-  wishlist: WishlistLine[],
-  catalog: CatalogEntry[]
-): void {
-  // アタッチ先の不足数だけで即submitOrderせず、いったん候補として集める。ネットワーク在庫の
-  // 確認(scanCatalog、コストが高い)は候補が実際にある時だけ行いたいため。
-  const candidates: { wish: WishlistLine; shortfall: number }[] = [];
+  block: Block,
+  budget: number
+): number {
+  if (budget <= 0) return 0;
+  const wishlist = getWishlist(dimension, block.location);
+  if (wishlist.length === 0) return 0;
+
+  const attachedLoc = getAttachedStorageLocation(block);
+  const destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+  if (!destContainer) return 0;
+  const catalog = scanContainerCatalog(destContainer);
+
+  let remaining = budget;
+  let consumed = 0;
   for (const wish of wishlist) {
+    if (remaining <= 0) break;
     const current =
       catalog.find((e) => e.key.typeId === wish.itemTypeId && (e.key.name ?? "") === (wish.itemName ?? ""))?.total ??
       0;
     const shortfall = wish.targetAmount - current;
     if (shortfall <= 0) continue;
-    if (hasPendingOrderFor(network.id, terminalLoc, wish.itemTypeId, wish.itemName)) continue;
-    candidates.push({ wish, shortfall });
-  }
-  if (candidates.length === 0) return;
 
-  // ネットワークに実際に無い(または明らかに足りない)品目は、注文しても搬入先解決時に
-  // shortfallとして即終了するだけの無駄な注文になる(次のチェック周期でまた同じ注文を出し
-  // 続けてしまう)。ここで初めてネットワーク在庫(networkCatalogCache.ts、tickごとに
-  // キャッシュ)を確認し、要求量を実在庫にクランプする(完全な保証ではなく目安。処理までの
-  // 間に他ターミナルが同時に消費してズレることは許容する。ユーザー要望)。
-  const networkCatalog = getNetworkCatalogCached(dimension, network);
-  const lines: OrderLine[] = [];
-  for (const { wish, shortfall } of candidates) {
-    const availableInNetwork =
-      networkCatalog.find((e) => e.key.typeId === wish.itemTypeId && (e.key.name ?? "") === (wish.itemName ?? ""))
-        ?.total ?? 0;
-    const requestAmount = Math.min(shortfall, availableInNetwork);
-    if (requestAmount <= 0) continue;
-
-    lines.push({
-      itemTypeId: wish.itemTypeId,
-      itemName: wish.itemName,
-      requested: requestAmount,
-      delivered: 0,
-      exhausted: false,
-    });
+    const attempt = Math.min(shortfall, remaining);
+    const extracted = extractFromStorages(
+      dimension,
+      network,
+      { typeId: wish.itemTypeId, name: wish.itemName },
+      attempt,
+      destContainer
+    );
+    remaining -= extracted;
+    consumed += extracted;
   }
-
-  if (lines.length > 0) {
-    submitOrder(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, lines);
-  }
+  return consumed;
 }
 
 // リストに無い、またはリストの目標を上回っている品目を預け入れる(自動預け入れ)。
 // 目標分は残す(送るのは超過分のみ)。リストに無い品目は目標0扱いなので全量が対象になる。
-function checkExcess(
+export function reconcileAutoTerminalDeposit(
   network: NetworkData,
-  terminalLoc: Vector3,
-  wishlist: WishlistLine[],
-  catalog: CatalogEntry[]
-): void {
-  const lines: DepositLine[] = [];
+  dimension: Dimension,
+  block: Block,
+  budget: number,
+  storageIndex?: StorageIndex,
+  depositTargets?: Vector3[]
+): number {
+  if (budget <= 0) return 0;
+  const autoDeposit = getAutoDeposit(dimension, block.location);
+  if (!autoDeposit) return 0;
+
+  const wishlist = getWishlist(dimension, block.location);
+  const attachedLoc = getAttachedStorageLocation(block);
+  const container = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+  if (!container) return 0;
+  const catalog = scanContainerCatalog(container);
+
+  let remaining = budget;
+  let consumed = 0;
   for (const entry of catalog) {
+    if (remaining <= 0) break;
     const wish = wishlist.find(
-      (w) => w.itemTypeId === entry.key.typeId && (w.itemName ?? "") === (entry.key.name ?? "")
+      (w: WishlistLine) => w.itemTypeId === entry.key.typeId && (w.itemName ?? "") === (entry.key.name ?? "")
     );
     const target = wish?.targetAmount ?? 0;
     const excess = entry.total - target;
     if (excess <= 0) continue;
-    if (hasPendingDepositFor(network.id, terminalLoc, entry.key.typeId, entry.key.name)) continue;
 
-    lines.push({
-      itemTypeId: entry.key.typeId,
-      itemName: entry.key.name,
-      requested: excess,
-      delivered: 0,
-      exhausted: false,
-    });
+    const attempt = Math.min(excess, remaining);
+    const inserted = insertIntoStorages(dimension, network, entry.key, attempt, container, storageIndex, depositTargets);
+    remaining -= inserted;
+    consumed += inserted;
   }
-
-  if (lines.length > 0) {
-    submitDeposit(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, lines);
-  }
+  return consumed;
 }

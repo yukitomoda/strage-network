@@ -868,6 +868,9 @@ vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、e
 - **実装**(`networkProcessing.ts`の`startCycleAlignedLoop`): 本処理ループ(`startNetworkProcessingLoop`、4章)が元々持っていた「基準ループ(`BASE_LOOP_INTERVAL_TICKS`=5tick)+ネットワークごとの前回処理tickを記憶するMap」というパターンを、`callback: (network, dimension) => void`を受け取る関数として切り出した。コントローラの周期短縮キットのTierに応じたサイクル間隔(`CYCLE_TICKS_BY_TIER`=[100, 80, 50, 25, 10]、4章参照)は`getCycleIntervalTicks(getAxisTier(...))`で求める。呼び出し側(4つの定期チェック)は「ネットワーク1件分の処理」(`checkNetworkX(network, dimension)`)だけを実装し、`startCycleAlignedLoop(checkNetworkX)`と書くだけでよくなった。呼び出しごとに専用の`lastProcessedTick`Mapを新設するため、4つの定期チェックは(間隔の計算式が同じになっても)引き続き互いに独立したループとして動作する(本処理ループとも独立)。
 - **本処理ループ自体もこの共通化の恩恵を受けた**: `startNetworkProcessingLoop`自身も`startCycleAlignedLoop`を使うようリファクタリングし、`dimension`の解決(`world.getDimension`)を1箇所に集約した。4つの定期チェックの各`checkNetworkX`関数も、以前は自分で`world.getDimension(network.dimensionId)`していたのをやめ、コールバック引数として受け取るだけになった(`padCheck.ts`の`playersStandingOn`も、`dimensionId: string`を受け取って内部で`world.getDimension`する二度手間をやめ、`checkNetworkPads`が既に持っている`dimension`を直接渡すように変更した)。
 - **効果**: 検知の遅延も、実際の搬入出処理と同じだけコントローラのグレードに応じて速くなる。周期短縮キットT4(10tick=0.5秒)なら検知間隔も0.5秒になり、搬入出パッドの体感ラグ(17章、検知待ち+処理サイクル待ちの合計)が大きく縮む(Tier0基準の最悪ケース約10秒 → T4なら約1秒)。
+- **(追記)25章の広告モデルへの移行で、4つの定期チェックは独立した`startXCheckLoop`を持たなくなり、`processNetworkOrders`/`processNetworkDeposits`(本処理ループ)から直接関数として呼ばれる形になった。検知と処理が別々のタイマー呼び出しですらなくなり、同一tickの同一関数呼び出し内で完結するため、この章で縮めた「検知待ち+処理サイクル待ち」のラグはさらに実質ゼロに近づいている。**
+
+
 
 ## 19. 個数指定スライダーを2のべき乗刻みに統一(ユーザー要望)
 
@@ -899,6 +902,8 @@ vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、e
 
 ## 22. 自動系ターミナルの「明らかに達成できない注文」を事前に抑制する(ユーザー要望)
 
+**(25章の広告モデルへの移行により、この章で導入したクランプ機構は自動端末・精密ターミナル・搬入出パッドについては不要になり削除されている。25章参照。以下は当時の設計判断の記録として残す。)**
+
 自動端末・精密ターミナル・搬入出パッドの定期チェックは、「アタッチ先(または所持品)の不足数」だけを見て`submitOrder`しており、**ネットワークにその品目が実際にあるかを確認していなかった**。品目がネットワークに無い(または足りない)場合、`processNetworkOrders`の`extractFromStorages`が搬入先を全ストレージ走査した末に0件しか取り出せず、その注文はshortfallとして即終了する。次のチェック周期になると`hasPendingOrderFor`が再びfalseに戻るため、**存在しない品目に対して同じ無駄な注文を周期ごとに延々と出し続ける**という問題があった(ユーザー指摘)。在庫管理ターミナルは元々ネットワーク全体のカタログを基準に注文量を決めているため、この問題は無い。
 
 - **対応**(`autoOrderCheck.ts`のcheckShortfalls、`precisionTerminalCheck.ts`のcheckSlot、`padCheck.ts`のcheckPlayer): アタッチ先/所持品の不足分から注文候補を出した後、`submitOrder`する前にネットワーク全体のカタログ(`scanCatalog`)を確認し、**要求量を実際のネットワーク在庫にクランプ**する(`Math.min(shortfall, availableInNetwork)`)。クランプ後が0以下ならその品目は今回注文しない。処理までの間に他のターミナルが同時に同じ品目を消費してズレることは許容する(ユーザーの要望通り、完璧な正確性は求めていない)。
@@ -928,10 +933,63 @@ vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、e
 
 精密ターミナルのスロットルールは、1エントリにつき1スロットしか指定できなかった。同じ品目を複数スロットで維持したいケース(例: かまど3台分の燃料スロットを1つの目標でまとめて管理したい)に対応するため、「スロット番号」欄に`1,2,3`(カンマ区切り)・`1-3`(範囲)・`1,3-5,7`(組み合わせ)のような書式で複数スロットを指定できるようにした。目標数量はグループ全体の合計として扱い、実際の搬入時に対象スロットへできるだけ均等に分配する(ユーザー要望の例: 3スロットに30個の目標を設定し、ネットワークに20個しか無い場合、7,7,6個に分配される)。
 
-- **データモデル**(`state.ts`): `PrecisionSlotLine.slotIndex: number`を`slotIndices: number[]`に変更した。`OrderLine.slotIndex?: number`も`slotIndices?: number[]`に変更したが、**`DepositLine.slotIndex?: number`はそのまま変更していない**(後述の通り、回収は複数スロットの分配計算が要らずスロットごとに独立して扱えるため)。
+- **データモデル**(`state.ts`): `PrecisionSlotLine.slotIndex: number`を`slotIndices: number[]`に変更した。当初は`OrderLine.slotIndex?: number`も`slotIndices?: number[]`に変更する形にしていたが、25章の広告モデルへの移行で精密ターミナルがOrderLine/DepositLineのキューを一切経由しなくなったため、`OrderLine`/`DepositLine`からスロット関連フィールドはどちらも削除されている(現状の型は25章参照)。
 - **入力/表示のパース・整形**(`slotRange.ts`、新設): `parseSlotIndices(text)`が入力書式(単一値・カンマ区切り・`a-b`範囲・その組み合わせ)を展開済みの`number[]`にパースする(不正な入力は`undefined`を返し、呼び出し元は何もしない。既存の単一スロット時代の「無効なら無視」方針を踏襲)。`formatSlotRange(indices)`は逆に、ソート済みの配列を連続区間ごとに`a-b`へまとめたカンマ区切り文字列に整形する(例: `[1,2,3,5,7]` → `"1-3,5,7"`)。保存は常に展開済みの配列で行い、元の入力文字列(表記の揺れ・順序)は保持しない。`precisionTerminalUi.ts`(入力・現在のリスト表示)と`statusListUi.ts`(「状況」タブのツールチップ表示)の両方から使う。
-- **均等分配のアルゴリズム**(`storageScan.ts`): 単純に配列の先頭スロットから順に満たしていくと、ネットワーク在庫が要求量に足りない場合に後方のスロットだけ0のまま、という偏った結果になってしまう(例: 3スロットに10個ずつ要求しているのに在庫が20個しか無い場合、先頭から満たすと10,10,0になる)。そこで2段階の処理にした: (1) `countAvailable`でネットワーク内の実在庫を(取り出さずに)数え、実際に配分可能な総量を先に確定させる。(2) `evenSplit(amount, n)`で、その総量をn個のスロットへできるだけ均等に配分する(端数は配列の先頭側のスロットから+1個ずつ乗せる)。(3) 配分が決まったスロットごとに、既存の単一スロット搬入関数`extractFromStoragesIntoSlot`を呼ぶ(新しい低レベルの搬入ロジックは追加していない、既存プリミティブの組み合わせで実現)。この一連の処理を`extractFromStoragesIntoSlots`としてまとめている。各スロットの空き容量(スタック上限)によっては計画通り届かないことがあるが、それは物理的な制約として許容する(「可能な限り均等に分配する」というユーザー要望通り)。
-- **補充(`precisionTerminalCheck.ts`のcheckSlotGroup)**: グループ内の各スロットについて、空または目標品目と一致するスロットだけを「補充してよいスロット」として抽出し、その合計不足分を1本の`OrderLine`(`slotIndices`に補充対象スロットの配列を積む)として送信する。ネットワーク在庫の事前確認(22章)・重複送信防止(`hasPendingSlotOrderFor`)も維持しており、後者は「候補のslotIndicesが既存の未完了ラインのslotIndicesと1つでも重なれば保留中とみなす」という判定に一般化した(同じ物理スロットへ複数のラインが同時に搬入を試みることを防ぐため)。
-- **回収(collect)は複数スロット化しても物理スロット単位のまま**: 回収(`insertSlotIntoStorages`)は1スロット分の中身しか扱えず、そもそも「複数スロットから集めた分をどう配分するか」という悩みが無い(ネットワーク側の受け皿は基本的に無制限とみなしているため)。そのため各スロットの「あるべき量」を`evenSplit(targetAmount, スロット数)`で求め(補充と同じ配分ロジックを流用)、各スロット独立に「その量を超えた分、または目標外の品目」を`DepositLine`(引き続き単一の`slotIndex`)として送信する。`DepositLine`の型自体は変更していない。
-- **既知の簡略化**: 各スロットの「あるべき量」は目標をスロット数で単純に均等分配した値であり、スロットごとの実際の現在量の偏りまでは考慮しない「水準合わせ(leveling)」ではない。例えばスロット1だけ既に多めに入っている状態で目標を再設定した場合、補充(不足しているスロット向け)と回収(スロット1の超過分)が同じチェック周期で同時に走ることがある。数サイクルのうちに均されるため実用上は問題無いと判断し、対応を見送った。また、**異なる2つのエントリが物理的に同じスロットを含む場合(スロット範囲の重複)の防止・警告は実装していない**(例: エントリAが`1-3`、エントリBが`3-5`を指定すると、スロット3を両方が奪い合う)。ユーザーが重複を避けて設定する前提としている。
+- **均等分配のアルゴリズム**(`storageScan.ts`): 単純に配列の先頭スロットから順に満たしていくと、ネットワーク在庫が要求量に足りない場合に後方のスロットだけ0のまま、という偏った結果になってしまう(例: 3スロットに10個ずつ要求しているのに在庫が20個しか無い場合、先頭から満たすと10,10,0になる)。そこで2段階の処理にした: (1) `countAvailable`でネットワーク内の実在庫を(取り出さずに)数え、実際に配分可能な総量を先に確定させる。(2) その総量をn個のスロットへできるだけ均等に配分する。(3) 配分が決まったスロットごとに、既存の単一スロット搬入関数`extractFromStoragesIntoSlot`を呼ぶ(新しい低レベルの搬入ロジックは追加していない、既存プリミティブの組み合わせで実現)。この一連の処理を`extractFromStoragesIntoSlots`としてまとめている。各スロットの空き容量(スタック上限)によっては計画通り届かないことがあるが、それは物理的な制約として許容する(「可能な限り均等に分配する」というユーザー要望通り)。
+  - **(実機で発見された不具合の修正済み) 単純な`evenSplit`では特定スロットが振動する**: 当初は(2)を毎回`evenSplit(amount, n)`(動かす量をn等分、端数は先頭スロットから+1)で行っていた。これは「全スロットが空の状態から1回で満たす」場合は正しいが、**既に一部のスロットが埋まっている状態(前回のサイクルで一部だけ届いた、等)では「動かす残り量」をスロットの現在の残量を無視してn等分してしまう**ため、残り1個をたまたま先頭スロットへ機械的に積み、その結果先頭スロットが「あるべき量」を1個超過し、回収(`reconcileSlotGroupDeposit`)がその1個を削って戻し、次のサイクルでまた同じ1個が先頭スロットへ積まれる…という**無限振動**を引き起こすことが実機で見つかった(ユーザー報告: `1-3,6-9`の7スロットに目標64個を設定した際、2マス目が9個と10個の間で振動し続けた)。原因は「動かす量」の再分配であって「各スロットのあるべき残量」を見ていなかったこと。`evenSplit`による均等割りを、**各スロットの現在値を見ながら最も少ないスロットから順に水準を合わせて埋めるwater-filling(`levelFill`)**に置き換えて修正した。`levelFill`は「全スロットが空」の場合は従来の`evenSplit`と同じ結果になる(例: 20個を3スロットに配分 -> 7,7,6)一方、一部が既に埋まっている場合も、既に上限に達したスロットへは追加せず、不足しているスロット同士でavailableを分け合うため、収束後は振動しない。`extractFromStoragesIntoSlots`の引数も、動かす量(amount)ではなく**各スロットの上限(cap、`evenSplit(targetAmount, スロット数)`)とスループット予算(budget)**を受け取る形に変更し、現在値の取得(`destContainer.getItem`)を関数内で行うようにした(呼び出し元の`reconcileSlotGroupWithdrawal`は、回収側と全く同じ`evenSplit(targetAmount, slotIndices.length)`でcapを求め、矛盾する品目が入っている対象外スロットを除いたものを渡すだけになった)。
+- **補充**: グループ内の各スロットについて、空または目標品目と一致するスロットだけを「補充してよいスロット」として抽出し、その合計不足分を対象スロットへ均等分配して搬入する。当初はこれを1本の`OrderLine`として`submitOrder`していたが、25章の広告モデルへの移行後は`precisionTerminalCheck.ts`の`reconcilePrecisionTerminalWithdrawal`が`extractFromStoragesIntoSlots`を直接呼ぶ形になり、`OrderLine`もキュー投入も経由しない(重複送信防止の`hasPendingSlotOrderFor`も、キュー自体が無くなったため不要になり削除した)。
+- **回収(collect)は複数スロット化しても物理スロット単位のまま**: 回収(`insertSlotIntoStorages`)は1スロット分の中身しか扱えず、そもそも「複数スロットから集めた分をどう配分するか」という悩みが無い(ネットワーク側の受け皿は基本的に無制限とみなしているため)。そのため各スロットの「あるべき量」を`evenSplit(targetAmount, スロット数)`で求め(補充と同じ配分ロジックを流用)、各スロット独立に「その量を超えた分、または目標外の品目」を搬入する。当初は`DepositLine`(単一の`slotIndex`)として`submitDeposit`していたが、これも25章の移行後は`reconcilePrecisionTerminalDeposit`が`insertSlotIntoStorages`を直接呼ぶ形になった。
+- **(解消済み) 補充と回収が同じ周期で同時に走る件**: 当初はここで「各スロットの『あるべき量』は目標をスロット数で単純に均等分配した値であり、スロットごとの実際の現在量の偏りまでは考慮しない」ため、例えばスロット1だけ既に多めに入っている状態で目標を再設定すると、補充(不足しているスロット向け)と回収(スロット1の超過分)が同じチェック周期で同時に走ることがある、と「実用上は問題無い」として対応を見送っていた。しかし上記の振動バグ修正(`levelFill`の導入)で、補充側も回収側と全く同じ`cap`(`evenSplit(targetAmount, スロット数)`)を基準に「現在値が`cap`未満のスロットだけ」を対象にするようになったため、**回収の条件(現在値が`cap`を超過)と補充の条件(現在値が`cap`未満)は同じ`cap`値に対して排他的になり、同一スロットで両方が同時に発火することは無くなった**(空スロットは回収側がそもそも対象外にしているため元々競合しない、目標外の品目が入ったスロットは回収のみが対象で補充からは除外されるため同様に競合しない)。結果的にこの限界は解消されている。
+- **既知の限界(未解消)**: **異なる2つのエントリが物理的に同じスロットを含む場合(スロット範囲の重複)の防止・警告は実装していない**(例: エントリAが`1-3`、エントリBが`3-5`を指定すると、スロット3を両方が奪い合う)。ユーザーが重複を避けて設定する前提としている。
 - **既存データの移行**(`terminalSettings.ts`): 既存ワールドに保存済みのスロットルールは旧形式(`slotIndex: number`単体)のままなので、`getPrecisionSlots`の読み込み時に`slotIndices: [旧slotIndex]`へ変換する後方互換シムを追加した。保存(`setPrecisionSlots`)は常に新形式で書き戻される。
+
+## 25. 目標系ターミナルを「広告モデル」へ移行(ユーザー提案・第1段階)
+
+目標系ターミナル(自動端末・在庫管理ターミナル・精密ターミナル・搬入出パッド)は、22章までの設計では「専用のチェックループが不足/超過を計算 → `submitOrder`/`submitDeposit`で`wh:orders`/`wh:deposits`キューに固定量を積む → 別サイクルで`processNetworkOrders`/`processNetworkDeposits`がFIFOで消化する」という2段階方式だった。この方式には、チェック時点のスナップショットと実際の搬入時点との間にズレが生じる(22章の対症療法が必要になった根本原因)、`hasPendingXFor`系の重複防止が必須になる、といった構造的な問題があった。
+
+議論の結果、コントローラが行う操作を**「引き出し」「預け入れ」「目標数の要求」の3種**に分けることにした。「引き出し」(通常のターミナルの手動カート・配達ターミナル)・「預け入れ」(通常のターミナルの手動カート)は、プレイヤーが「指定した数だけ追加で欲しい/手放したい」という一回性の要求であり、目標値に近づけるロジックで扱うのは意図に反する(ユーザー指摘)ため、22章までの固定量キュー方式のまま維持する。一方「目標数の要求」(自動端末・在庫管理ターミナル・精密ターミナル・搬入出パッド)は、目標値自体が既に`terminalSettings.ts`に永続化されているため、**キューに固定量を積む代わりに、コントローラの処理サイクルがその場で目標設定を直接読み、必要な分だけ動かす**(広告モデル)方式に置き換えた。目標値が実世界のコンテナの中身と直接比較されるため、複数サイクルにまたがる継続も`delivered`のような別カウンタ無しに自然に成立する(コンテナの中身自体が進捗を表す)。この段階では「引き出し」「預け入れ」には手を付けていない(第2段階として別途判断する)。
+
+### 予算の共有と処理順序
+
+`processNetworkOrders`/`processNetworkDeposits`は、それぞれ**まず既存の固定量FIFOキューを今まで通り消化し、余った予算だけを目標系の直接処理に回す**(プレイヤー起点の引き出し/預け入れを優先させるため)。引き出し方向・預け入れ方向で独立した予算を持つ設計(4章)はそのまま維持している。
+
+### 新設: `targetReconciliation.ts`
+
+`network.terminals`を1回だけ走査し、typeIdに応じて各ターミナル種別の直接処理関数へ振り分けるディスパッチャ。`reconcileAllTargetWithdrawals`/`reconcileAllTargetDeposits`の2関数を持ち、走査順は`network.terminals`の登録順(既存のFIFOと同じ「早い者勝ち」特性を維持する。ラウンドロビン等の公平性改善は今回のスコープ外とし、後続の課題とした)。レッドストーンロック(`isRedstoneLocked`)の判定は4種で共通のためここに一括した(以前は各チェックループが個別に判定していた)。`orderProcessing.ts`は`extractFromStorages`系を、`depositProcessing.ts`は`insertIntoStorages`系を使うため、循環参照を避けて`targetReconciliation.ts`が4つの端末別モジュール→`storageScan.ts`を参照し、`orderProcessing.ts`/`depositProcessing.ts`が`targetReconciliation.ts`を参照する向きにしている。
+
+`reconcileAllTargetDeposits`のstorageIndex/depositTargets引数は、呼び出し元(`depositProcessing.ts`)が固定量の「預け入れ」FIFO向けに既に構築済みならそれを渡して使い回し、無ければここで初めて構築する(ネットワーク全体のスロットを走査するコストがあるため、必要な時だけ払う)。**depositTargets(Drain指定されたストレージを除外したリスト)は単なる最適化ではなく省略不可**であることに注意した実装にしている: 渡さないと`insertIntoStorages`側のデフォルト(`network.storages`全体)にフォールバックしてDrain指定を無視してしまうため、未指定時は必ずここで構築するようにしている。
+
+### 4つの端末別モジュールの改修
+
+`autoOrderCheck.ts`/`inventoryCheck.ts`/`precisionTerminalCheck.ts`/`padCheck.ts`は、それぞれ「shortfall/excessを計算して`submitOrder`/`submitDeposit`する」チェック関数を、「shortfall/excessを計算し、budget内で`extractFromStorages`/`insertIntoStorages`系を直接呼んで実際に搬入出する」`reconcileXWithdrawal`/`reconcileXDeposit`関数に置き換えた(戻り値: 消費した予算)。
+
+- **重複防止(`hasPendingXFor`系)は不要になり削除**: 何も"発行"しないため二重発行という概念が無い。
+- **22章のネットワーク在庫クランプは不要になり削除**: `extractFromStorages`自体が実在庫以上は取り出さないため、事前確認が不要。3ファイルのロジックが単純化された。
+- **`networkCatalogCache.ts`は維持**: 在庫管理ターミナルは元々ネットワーク全体の在庫数が比較基準そのものなので、直接処理後も必要(クランプ用途ではなく本質的な比較用途)。
+- **精密ターミナルの複数スロット均等分配(24章)はそのまま流用**: `evenSplit`/`extractFromStoragesIntoSlots`の呼び出しタイミングが変わっただけ。
+- **搬入出パッド**: `playersStandingOn`で既にプレイヤーのインベントリ`Container`を手にしているため、`order.playerName`を介した搬入先解決を経由せず直接使える(以前より単純になった)。withdraw/deposit方向で別々のエントリ関数(`reconcileIoPadWithdrawal`/`reconcileIoPadDeposit`)に分割し、パッドの搬入出モード("both"/"deposit_only"/"withdraw_only")による制御はそれぞれの早期returnで表現している。
+- **レッドストーンロックの反映が即時になった**(副次的な改善): 以前はロック後も既にキュー投入済みの注文は最後まで処理されていたが、新方式では毎サイクル`isRedstoneLocked`を再評価するため、ロックした瞬間に止まるようになった。
+
+### `orderProcessing.ts`/`depositProcessing.ts`
+
+- `processNetworkOrders`/`processNetworkDeposits`: 既存のFIFO消化ループの直後に、残り予算があれば`reconcileAllTargetWithdrawals`/`reconcileAllTargetDeposits`を呼ぶ形にした。`processNetworkDeposits`は元々`requests.length === 0`なら早期returnしていたが、目標系の直接処理が後段に控えるため、この早期returnは削除し、代わりに`storageIndex`/`depositTargets`の構築を`requests.length > 0`の時だけ行う形にして(FIFOが空でも目標系側で遅延構築される)、既存の「無駄なら構築しない」という最適化の精神は維持した。
+- `hasPendingOrderFor`/`hasPendingSlotOrderFor`/`hasPendingDepositFor`/`hasPendingSlotDepositFor`を削除(呼び出し元が無くなったため)。
+- **搬入出パッド専用の分岐がFIFO側から丸ごと消えた**: 搬入出パッドはもう`Order`/`DepositRequest`のFIFOキューに乗ることが無いため、`processNetworkOrders`の搬入先解決(`order.playerName`からプレイヤーを探す分岐)・`finalizeOrder`/`finalizeDeposit`の完了通知(「搬出完了!」「搬入完了!」)は、いずれも到達しないコードになっていたため削除した。配達ターミナルは「引き出し」のままなので、対応する分岐(オンラインなら位置に関わらずインベントリへ届ける等)は変更していない。
+- `finalizeOrder`/`finalizeDeposit`(完了通知・shortfall記録)は「引き出し」「預け入れ」専用のまま。目標系はfinalizeを経由しなくなったため、自動端末等で今まで出ていた「引き出し#XXXの受け取り準備ができました」という(元々やや不自然だった)通知は目標系では出なくなった。
+
+### `main.ts`
+
+`startAutoTerminalCheckLoop()`・`startInventoryTerminalCheckLoop()`・`startPrecisionTerminalCheckLoop()`・`startPadCheckLoop()`の呼び出しと関連importを削除した(処理は`startNetworkProcessingLoop`経由の`processNetworkOrders`/`processNetworkDeposits`内に統合されたため)。検知と処理が同一tickの同一関数呼び出し内で完結するようになり、18章で対応した「パッドに乗ってから搬入出が始まるまでのラグ」もさらに縮んだ(18章末尾に追記した)。
+
+### `ioPadProgress.ts`の再設計
+
+以前はキュー(`Order`/`DepositRequest`)の`delivered`/`requested`を読んで進捗(「搬出中... X/Y個」)を表示していたが、目標系がキューを持たなくなったため参照先が無くなった。表示専用のロジックとして、パッドの上に乗っているプレイヤーごとに、目標設定(`getPadTargets`)と現在の所持品(ライブスキャン、`scanContainerCatalog`)を直接比較し、目標未達/超過の品目があれば「現在N/目標M 品名」の行(不足は§a、超過は§bで色分け)をアクションバーに表示する形に作り直した(実際の搬入出は行わない、表示専用の軽量な比較)。`playersStandingOn`は`padCheck.ts`からexportして共有した。`setActionBar`が`RawMessage`配列を受け付ける(`text`/`translate`混在可)ことを利用し、カスタム名の無い品目もローカライズされた表示名で出せるようにしている。配達ターミナルの`deliveryProgress.ts`は「引き出し」のままなので変更していない。
+
+### 状況(UI)への影響
+
+`terminalSettings.ts`・各ターミナルの設定UI(`autoTerminalUi.ts`等)は目標の読み書き先として今まで通り機能するため無改修。ただし副作用として、目標系4種の「状況」タブ(引き出し/預け入れの進行中一覧、`setupOrderStatusSection`/`setupDepositStatusSection`)は今後常に空になる(キューに何も積まれなくなるため)。空でも壊れはしないため、タブ自体の削除は今回のスコープ外とし、別途判断することにした。同じ理由で`statusListUi.ts`のツールチップが持っていたスロット表示(`slotIndex`/`slotIndices`)分岐も、参照するデータが二度と現れなくなったため削除した。
+
+### 今回のスコープ外(第2段階以降の課題)
+
+- **「引き出し」「預け入れ」への広告モデルの適用**: 議論はしたが、「今何も欲しくない」通常のターミナル・配達ターミナルも含めて毎サイクル全ターミナルをスキャンするコストが新たに発生するため、目標系の移行結果を見てから判断することにした。
+- **目標系の中でのラウンドロビン等の公平性改善**: 現状は`network.terminals`の登録順を維持しているため、慢性的に予算が不足するネットワークでは後方のターミナルが割を食う可能性がある(22章までのFIFOと同じ特性であり新規の劣化ではない)。

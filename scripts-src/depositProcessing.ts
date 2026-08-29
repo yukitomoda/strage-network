@@ -1,4 +1,4 @@
-import { Dimension, system, Vector3, world } from "@minecraft/server";
+import { system, Vector3, world } from "@minecraft/server";
 import {
   appendDepositPartial,
   getDepositCancels,
@@ -8,7 +8,7 @@ import {
   setDepositIssuing,
   setDeposits,
 } from "./network";
-import { buildStorageIndex, insertIntoStorages, insertSlotIntoStorages } from "./storageScan";
+import { buildStorageIndex, insertIntoStorages } from "./storageScan";
 import {
   DepositLine,
   DepositRequest,
@@ -19,7 +19,8 @@ import {
   PartialResultLine,
 } from "./state";
 import { getDrain } from "./storageSettings";
-import { getAttachedStorageLocation, isTerminalLikeBlock, IO_PAD_BLOCK_ID } from "./terminalBlock";
+import { reconcileAllTargetDeposits } from "./targetReconciliation";
+import { getAttachedStorageLocation, isTerminalLikeBlock } from "./terminalBlock";
 import { CONTROLLER_SPEED_AXIS } from "./controllerAxes";
 import { getAxisTier } from "./upgrade";
 
@@ -57,46 +58,6 @@ export function listActiveDeposits(networkId: string): DepositRequest[] {
   return [...getDepositIssuing(networkId).map((entry) => entry.request), ...getDeposits(networkId)];
 }
 
-// orderProcessing.tsのhasPendingOrderForと同じ発想。直前に送った預け入れがまだ処理中なら
-// 同じ品目を二重に送らないための判定。自動端末・在庫管理ターミナルのどちらの定期チェックからも
-// 使う共通処理なのでここに置いている。
-export function hasPendingDepositFor(
-  networkId: string,
-  terminalLoc: Vector3,
-  itemTypeId: string,
-  itemName: string | undefined
-): boolean {
-  const pendingDeposits = [
-    ...getDepositIssuing(networkId).map((entry) => entry.request),
-    ...getDeposits(networkId),
-  ];
-  return pendingDeposits.some(
-    (request) =>
-      locEquals(request.terminal, terminalLoc) &&
-      request.lines.some(
-        (line) =>
-          line.itemTypeId === itemTypeId &&
-          (line.itemName ?? "") === (itemName ?? "") &&
-          !line.exhausted &&
-          line.delivered < line.requested
-      )
-  );
-}
-
-// orderProcessing.tsのhasPendingSlotOrderForと同じ発想。精密ターミナルの「リスト外スロットの
-// 回収」は送信のたびに品目が変わりうるため、(terminal, slotIndex)ベースで判定する。
-export function hasPendingSlotDepositFor(networkId: string, terminalLoc: Vector3, slotIndex: number): boolean {
-  const pendingDeposits = [
-    ...getDepositIssuing(networkId).map((entry) => entry.request),
-    ...getDeposits(networkId),
-  ];
-  return pendingDeposits.some(
-    (request) =>
-      locEquals(request.terminal, terminalLoc) &&
-      request.lines.some((line) => line.slotIndex === slotIndex && !line.exhausted && line.delivered < line.requested)
-  );
-}
-
 // orderProcessing.tsのcancelOrderと同じ発想の専用キャンセルキュー。
 export function cancelDeposit(networkId: string, requestId: string): void {
   const cancels = getDepositCancels(networkId);
@@ -129,95 +90,86 @@ export function processNetworkDeposits(network: NetworkData): boolean {
 
   let budget = getDepositThroughput(getAxisTier(dimension, network.controller, CONTROLLER_SPEED_AXIS));
   let requests = getDeposits(network.id);
-  if (requests.length === 0) return false;
-
-  // 「どのストレージに何が既にあるか」の索引は、このtickのこのネットワーク分だけ1回作って使い回す。
-  // 品目ごとに全ストレージを舐め直すと、大規模なネットワーク(例:ラージチェスト30個=1620スロット)で
-  // 重くなりすぎるため。スナップショットなので、このtick中に新しく届いた品目までは反映されないが、
-  // 次のtickには自然に反映されるので実用上は問題ない。
-  const storageIndex = buildStorageIndex(dimension, network);
-  // Drain指定されたストレージは預け入れ先として選ばれない(倉庫レンチのDrainモード参照)。
-  // これも品目ごとに問い合わせず、ネットワークにつき1tick1回だけ判定してリストにしておく。
-  const depositTargets = network.storages.filter((loc) => !getDrain(dimension, loc));
   let anyInserted = false;
 
-  while (budget > 0 && requests.length > 0) {
-    const request = requests[0];
-    const line = request.lines.find((l) => !l.exhausted && l.delivered < l.requested);
+  // 「どのストレージに何が既にあるか」の索引・Drain指定を除いた搬入先リストは、このtickの
+  // このネットワーク分だけ1回作って使い回す(大規模ネットワークでのコスト対策)。固定量の
+  // 「預け入れ」FIFOが無い(requests.length===0)場合は、ここでは作らずtargetReconciliation.ts側で
+  // 遅延構築させる(25章。実際に何か搬入する可能性がある時だけコストを払うため)。
+  let storageIndex;
+  let depositTargets;
+  if (requests.length > 0) {
+    storageIndex = buildStorageIndex(dimension, network);
+    depositTargets = network.storages.filter((loc) => !getDrain(dimension, loc));
 
-    if (!line) {
-      finalizeDeposit(network.id, dimension, request);
-      requests = requests.slice(1);
-      setDeposits(network.id, requests);
-      continue;
+    while (budget > 0 && requests.length > 0) {
+      const request = requests[0];
+      const line = request.lines.find((l) => !l.exhausted && l.delivered < l.requested);
+
+      if (!line) {
+        finalizeDeposit(network.id, request);
+        requests = requests.slice(1);
+        setDeposits(network.id, requests);
+        continue;
+      }
+
+      // network.terminals(登録データ)を正とする。理由はorderProcessing.tsの同様の箇所を参照。
+      const stillRegistered = network.terminals.some((t) => locEquals(t, request.terminal));
+      if (!stillRegistered) {
+        finalizeDeposit(network.id, request);
+        requests = requests.slice(1);
+        setDeposits(network.id, requests);
+        continue;
+      }
+
+      const terminalBlock = dimension.getBlock(request.terminal);
+      if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
+        // 登録はあるが今はブロックを取得できない(チャンク未読み込み等)。次tickに再試行する。
+        break;
+      }
+
+      // 預け入れ元はターミナルが張り付いている面(引き出しの搬入先と同じ場所)。毎回動的に見る。
+      // (搬入出パッドは25章の広告モデルへ移行済みでFIFOキュー(=ここ)に乗ることは無い。
+      // 張り付いた先という概念が無いパッド専用の分岐は不要になったため削除した。)
+      const sourceContainer = dimension
+        .getBlock(getAttachedStorageLocation(terminalBlock))
+        ?.getComponent("inventory")?.container;
+      if (!sourceContainer) {
+        finalizeDeposit(network.id, request);
+        requests = requests.slice(1);
+        setDeposits(network.id, requests);
+        continue;
+      }
+
+      const attempt = Math.min(line.requested - line.delivered, budget);
+      const inserted = insertIntoStorages(
+        dimension,
+        network,
+        { typeId: line.itemTypeId, name: line.itemName },
+        attempt,
+        sourceContainer,
+        storageIndex,
+        depositTargets
+      );
+      line.delivered += inserted;
+      budget -= inserted;
+      if (inserted > 0) anyInserted = true;
+
+      // inserted < attempt は「予算不足」ではなく「搬入元に無い/搬入先が満杯」を意味する
+      // (attempt自体が budget で既に絞られているため)
+      if (inserted < attempt) line.exhausted = true;
+
+      setDeposits(network.id, requests); // ラインを1つ処理するたびに書き戻す
+
+      if (budget <= 0) break;
     }
+  }
 
-    // network.terminals(登録データ)を正とする。理由はorderProcessing.tsの同様の箇所を参照。
-    const stillRegistered = network.terminals.some((t) => locEquals(t, request.terminal));
-    if (!stillRegistered) {
-      finalizeDeposit(network.id, dimension, request);
-      requests = requests.slice(1);
-      setDeposits(network.id, requests);
-      continue;
-    }
-
-    const terminalBlock = dimension.getBlock(request.terminal);
-    if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
-      // 登録はあるが今はブロックを取得できない(チャンク未読み込み等)。次tickに再試行する。
-      break;
-    }
-
-    // 預け入れ元はターミナルが張り付いている面(引き出しの搬入先と同じ場所)。毎回動的に見る。
-    // 搬入出パッド: orderProcessing.tsの搬入先解決と対称に、張り付いた先の代わりにパッドの上に
-    // 乗っているプレイヤー(request.playerName)のインベントリを預け入れ元にする。見つからなければ
-    // (ログアウト・パッドから離れた等)sourceContainerはundefinedのままとなり、下のif文の
-    // 「預け入れ元が無い」処理(shortfallとして確定)にそのまま乗る。
-    const sourceContainer =
-      terminalBlock.typeId === IO_PAD_BLOCK_ID
-        ? world.getPlayers().find((p) => p.name === request.playerName)?.getComponent("inventory")?.container
-        : dimension.getBlock(getAttachedStorageLocation(terminalBlock))?.getComponent("inventory")?.container;
-    if (!sourceContainer) {
-      finalizeDeposit(network.id, dimension, request);
-      requests = requests.slice(1);
-      setDeposits(network.id, requests);
-      continue;
-    }
-
-    const attempt = Math.min(line.requested - line.delivered, budget);
-    // 精密ターミナルからの依頼(line.slotIndexあり)は指定スロットのみから取り出す
-    // (storageScan.tsのinsertSlotIntoStorages参照)。それ以外は従来通りコンテナ全体を対象にする。
-    const inserted =
-      line.slotIndex !== undefined
-        ? insertSlotIntoStorages(
-            dimension,
-            network,
-            { typeId: line.itemTypeId, name: line.itemName },
-            attempt,
-            sourceContainer,
-            line.slotIndex,
-            storageIndex,
-            depositTargets
-          )
-        : insertIntoStorages(
-            dimension,
-            network,
-            { typeId: line.itemTypeId, name: line.itemName },
-            attempt,
-            sourceContainer,
-            storageIndex,
-            depositTargets
-          );
-    line.delivered += inserted;
-    budget -= inserted;
+  // 目標系(自動端末/在庫管理ターミナル/精密ターミナル/搬入出パッド)は、固定量の「預け入れ」
+  // FIFOを消化した残り予算で直接処理する(広告モデル、25章)。
+  if (budget > 0) {
+    const inserted = reconcileAllTargetDeposits(network, dimension, budget, storageIndex, depositTargets);
     if (inserted > 0) anyInserted = true;
-
-    // inserted < attempt は「予算不足」ではなく「搬入元に無い/搬入先が満杯」を意味する
-    // (attempt自体が budget で既に絞られているため)
-    if (inserted < attempt) line.exhausted = true;
-
-    setDeposits(network.id, requests); // ラインを1つ処理するたびに書き戻す
-
-    if (budget <= 0) break;
   }
 
   return anyInserted;
@@ -237,7 +189,10 @@ function moveReadyDepositIssuingEntries(network: NetworkData): void {
   setDeposits(network.id, requests);
 }
 
-function finalizeDeposit(networkId: string, dimension: Dimension, request: DepositRequest): void {
+// 預け入れは元々どのターミナルも完了通知の仕組みが無い(引き出しのfinalizeOrderと非対称)。
+// 搬入出パッドは25章の広告モデルへ移行済みでこの関数を経由しないため、以前ここにあった
+// io_pad専用のアクションバー通知はioPadProgress.ts側のライブ比較表示に統合した。
+function finalizeDeposit(networkId: string, request: DepositRequest): void {
   const shortfall: PartialResultLine[] = request.lines
     .filter((l) => l.delivered < l.requested)
     .map((l) => ({ itemTypeId: l.itemTypeId, itemName: l.itemName, amount: l.requested - l.delivered }));
@@ -245,14 +200,4 @@ function finalizeDeposit(networkId: string, dimension: Dimension, request: Depos
   if (shortfall.length > 0) {
     appendDepositPartial(networkId, { requestId: request.id, terminal: request.terminal, shortfall });
   }
-
-  // 預け入れは元々どのターミナルも完了通知の仕組みが無いが、搬入出パッドはioPadProgress.tsの
-  // 進捗表示に続けて完了もアクションバーに表示する(orderProcessing.tsのfinalizeOrderと対称、
-  // ユーザー要望)。他のターミナルの挙動は変えないため、io_padだけに絞る。
-  if (dimension.getBlock(request.terminal)?.typeId !== IO_PAD_BLOCK_ID) return;
-  const player = world.getPlayers().find((p) => p.name === request.playerName);
-  if (!player) return; // オフライン等。ログイン中の通知のみサポート(MVP、orderProcessing.tsと同じ方針)。
-  player.onScreenDisplay.setActionBar(
-    shortfall.length > 0 ? "§e搬入完了(一部搬入できませんでした)" : "§a搬入完了!"
-  );
 }
