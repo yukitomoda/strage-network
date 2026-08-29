@@ -1,5 +1,6 @@
 import { system, world } from "@minecraft/server";
 import { CONTROLLER_CYCLE_AXIS } from "./controllerAxes";
+import { getControllerEnabled } from "./controllerSettings";
 import { getAllNetworks, getIssuing, getOrders } from "./network";
 import { getCycleIntervalTicks } from "./networkProcessing";
 import { DELIVERY_TERMINAL_BLOCK_ID } from "./terminalBlock";
@@ -16,6 +17,8 @@ export function startDeliveryProgressLoop(): void {
   system.runInterval(() => {
     for (const network of getAllNetworks()) {
       const dimension = world.getDimension(network.dimensionId);
+      // 「起動」スイッチがOFFの間は進捗も変化しないため、表示更新もスキップする(networkProcessing.ts参照)。
+      if (!getControllerEnabled(dimension, network.controller)) continue;
       const activeOrders = [...getIssuing(network.id).map((entry) => entry.order), ...getOrders(network.id)];
 
       for (const order of activeOrders) {

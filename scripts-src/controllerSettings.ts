@@ -7,6 +7,7 @@ import { locEquals } from "./state";
 // JSON)を肥大化させない一貫性のため、同じ非表示エンティティ方式に揃えている。
 const SETTINGS_ENTITY_TYPE = "wh:controller_settings";
 const NOTIFY_ON_ORGANIZE_COMPLETE_PROPERTY = "wh:notify_on_organize_complete";
+const ENABLED_PROPERTY = "wh:enabled";
 const OWNER_LOCATION_PROPERTY = "wh:owner_loc";
 
 function centerOf(loc: Vector3): Vector3 {
@@ -60,4 +61,18 @@ export function getNotifyOnOrganizeComplete(dimension: Dimension, controllerLoc:
 
 export function setNotifyOnOrganizeComplete(dimension: Dimension, controllerLoc: Vector3, value: boolean): void {
   ensureSettingsEntity(dimension, controllerLoc).setDynamicProperty(NOTIFY_ON_ORGANIZE_COMPLETE_PROPERTY, value);
+}
+
+// ネットワークの「起動」スイッチ(ユーザー要望)。OFFの間、このネットワークの定期Tick処理
+// (引き出し/預け入れ/整理/オブザーバー再計算、および配達・搬入出パッドの進捗表示)を
+// すべてスキップする。アドオンの更新作業中に安全に一時停止させる用途を想定しているため、
+// デフォルトはtrue(既存ワールドをこのバージョンへ更新した直後も、エンティティ未生成の間は
+// この既定値が使われるため今まで通り動き続ける)。
+export function getControllerEnabled(dimension: Dimension, controllerLoc: Vector3): boolean {
+  const value = findSettingsEntity(dimension, controllerLoc)?.getDynamicProperty(ENABLED_PROPERTY);
+  return typeof value === "boolean" ? value : true; // デフォルトtrue
+}
+
+export function setControllerEnabled(dimension: Dimension, controllerLoc: Vector3, value: boolean): void {
+  ensureSettingsEntity(dimension, controllerLoc).setDynamicProperty(ENABLED_PROPERTY, value);
 }

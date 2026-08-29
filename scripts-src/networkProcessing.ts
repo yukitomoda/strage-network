@@ -1,5 +1,6 @@
 import { Dimension, system, world } from "@minecraft/server";
 import { CONTROLLER_CYCLE_AXIS } from "./controllerAxes";
+import { getControllerEnabled } from "./controllerSettings";
 import { processNetworkDeposits } from "./depositProcessing";
 import { getAllNetworks } from "./network";
 import { recalculateNetworkObservers } from "./networkObserverProcessing";
@@ -44,6 +45,10 @@ export function startCycleAlignedLoop(callback: (network: NetworkData, dimension
   system.runInterval(() => {
     for (const network of getAllNetworks()) {
       const dimension = world.getDimension(network.dimensionId);
+      // 「起動」スイッチ(ユーザー要望、controllerSettings.ts参照)がOFFの間はこのネットワークの
+      // Tick処理を丸ごとスキップする。lastProcessedTickも更新しないため、再度ONにした直後は
+      // (経過tick数がcycleTicksを確実に超えているので)次の基準ループで即座に再開する。
+      if (!getControllerEnabled(dimension, network.controller)) continue;
       const cycleTicks = getCycleIntervalTicks(getAxisTier(dimension, network.controller, CONTROLLER_CYCLE_AXIS));
       const last = lastProcessedTick.get(network.id);
       if (last !== undefined && system.currentTick - last < cycleTicks) continue;

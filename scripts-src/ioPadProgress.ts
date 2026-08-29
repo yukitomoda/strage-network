@@ -1,5 +1,6 @@
 import { ItemStack, RawMessage, system, world } from "@minecraft/server";
 import { CONTROLLER_CYCLE_AXIS } from "./controllerAxes";
+import { getControllerEnabled } from "./controllerSettings";
 import { getAllNetworks } from "./network";
 import { getCycleIntervalTicks } from "./networkProcessing";
 import { playersStandingOn } from "./padCheck";
@@ -20,6 +21,8 @@ export function startPadProgressLoop(): void {
   system.runInterval(() => {
     for (const network of getAllNetworks()) {
       const dimension = world.getDimension(network.dimensionId);
+      // 「起動」スイッチがOFFの間は搬入出自体が行われないため、表示更新もスキップする(networkProcessing.ts参照)。
+      if (!getControllerEnabled(dimension, network.controller)) continue;
 
       for (const loc of network.terminals) {
         const block = dimension.getBlock(loc);

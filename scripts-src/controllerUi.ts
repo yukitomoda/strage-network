@@ -1,7 +1,12 @@
 import { Block, Player, system } from "@minecraft/server";
 import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } from "@minecraft/server-ui";
 import { CONTROLLER_AXES, CONTROLLER_CYCLE_AXIS, CONTROLLER_RANGE_AXIS, CONTROLLER_SPEED_AXIS, getRangeForTier } from "./controllerAxes";
-import { getNotifyOnOrganizeComplete, setNotifyOnOrganizeComplete } from "./controllerSettings";
+import {
+  getControllerEnabled,
+  getNotifyOnOrganizeComplete,
+  setControllerEnabled,
+  setNotifyOnOrganizeComplete,
+} from "./controllerSettings";
 import { getDepositThroughput, listActiveDeposits } from "./depositProcessing";
 import { findNetworkByController } from "./network";
 import { getCycleIntervalTicks } from "./networkProcessing";
@@ -178,6 +183,13 @@ export function showControllerUi(player: Player, block: Block): void {
     form.divider({ visible: isUpgradeTab });
   }
 
+  const enabled = new ObservableBoolean(getControllerEnabled(dimension, block.location), {
+    clientWritable: true,
+  });
+  enabled.subscribe((value) => {
+    setControllerEnabled(dimension, block.location, value);
+  });
+
   const notifyOnComplete = new ObservableBoolean(getNotifyOnOrganizeComplete(dimension, block.location), {
     clientWritable: true,
   });
@@ -187,6 +199,10 @@ export function showControllerUi(player: Player, block: Block): void {
 
   form.label("このコントローラの設定です。", { visible: isSettingsTab });
   form.divider({ visible: isSettingsTab });
+  form.toggle("起動", enabled, {
+    description: "コントローラの起動・停止を切り替えます。",
+    visible: isSettingsTab,
+  });
   form.toggle("整理完了時に通知する", notifyOnComplete, { visible: isSettingsTab });
 
   form
