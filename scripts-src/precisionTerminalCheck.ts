@@ -1,7 +1,7 @@
 import { Block, Container, Dimension, ItemStack, Vector3 } from "@minecraft/server";
 import { evenSplit, extractFromStoragesIntoSlots, insertSlotIntoStorages, StorageIndex } from "./storageScan";
 import { getAttachedStorageLocation } from "./terminalBlock";
-import { getPrecisionSlots } from "./terminalSettings";
+import { getPrecisionCollectUnspecified, getPrecisionSlots } from "./terminalSettings";
 import { NetworkData, PrecisionSlotLine } from "./state";
 
 // 目標系ターミナルの「広告モデル」(25章)。1つのルールが複数スロットを指定できる
@@ -95,7 +95,8 @@ export function reconcilePrecisionTerminalDeposit(
 ): number {
   if (budget <= 0) return 0;
   const slots = getPrecisionSlots(dimension, block.location);
-  if (slots.length === 0) return 0;
+  const collectUnspecified = getPrecisionCollectUnspecified(dimension, block.location);
+  if (slots.length === 0 && !collectUnspecified) return 0;
 
   const attachedLoc = getAttachedStorageLocation(block);
   const container = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
@@ -109,6 +110,24 @@ export function reconcilePrecisionTerminalDeposit(
     const delivered = reconcileSlotGroupDeposit(network, dimension, container, rule, remaining, storageIndex, depositTargets);
     remaining -= delivered;
     consumed += delivered;
+  }
+
+  // 「未指定スロットを回収する」(ユーザー要望): どのルールにも含まれていないスロットを、
+  // 目標なし+回収ONの仮想ルールとして扱う(reconcileSlotGroupDepositは、hasTargetがfalseの
+  // ルールを渡すと中身の品目を問わず全量を余剰とみなす。23章の「空に設定」と同じ挙動)。
+  // ユーザーが明示したルールを優先するため、最後にまとめて処理する。
+  if (collectUnspecified && remaining > 0) {
+    const specifiedSlots = new Set(slots.flatMap((rule) => rule.slotIndices));
+    const unspecifiedSlots: number[] = [];
+    for (let i = 0; i < container.size; i++) {
+      if (!specifiedSlots.has(i)) unspecifiedSlots.push(i);
+    }
+    if (unspecifiedSlots.length > 0) {
+      const catchAllRule: PrecisionSlotLine = { slotIndices: unspecifiedSlots, targetAmount: 0, collect: true };
+      const delivered = reconcileSlotGroupDeposit(network, dimension, container, catchAllRule, remaining, storageIndex, depositTargets);
+      remaining -= delivered;
+      consumed += delivered;
+    }
   }
   return consumed;
 }

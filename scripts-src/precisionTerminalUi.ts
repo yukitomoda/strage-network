@@ -17,7 +17,14 @@ import { setupQuantitySlider } from "./quantitySlider";
 import { setupDepositStatusSection, setupOrderStatusSection } from "./statusListUi";
 import { CatalogEntry, scanCatalog } from "./storageScan";
 import { getAttachedStorageLocation } from "./terminalBlock";
-import { getPrecisionSlots, getTerminalName, setPrecisionSlots, setTerminalName } from "./terminalSettings";
+import {
+  getPrecisionCollectUnspecified,
+  getPrecisionSlots,
+  getTerminalName,
+  setPrecisionCollectUnspecified,
+  setPrecisionSlots,
+  setTerminalName,
+} from "./terminalSettings";
 
 const ROW_COUNT = 8;
 // 1スロット1エントリの制約があるため上限を設ける(クラフター9スロットに余裕を持たせた数。
@@ -344,17 +351,27 @@ function setupSettingsTab(
   tabVisible: ObservableBoolean,
   dimension: Dimension,
   terminalLoc: Vector3,
-  initialName: string
+  initialName: string,
+  initialCollectUnspecified: boolean
 ): void {
   const name = new ObservableString(initialName, { clientWritable: true });
   name.subscribe((value) => {
     setTerminalName(dimension, terminalLoc, value);
   });
 
+  const collectUnspecified = new ObservableBoolean(initialCollectUnspecified, { clientWritable: true });
+  collectUnspecified.subscribe((value) => {
+    setPrecisionCollectUnspecified(dimension, terminalLoc, value);
+  });
+
   form.label("このターミナルの設定です。", { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.textField("名前", name, {
     description: "精密ターミナルの識別用です。",
+    visible: tabVisible,
+  });
+  form.toggle("未指定スロットの回収", collectUnspecified, {
+    description: "目標未指定のスロットからアイテムを回収します。",
     visible: tabVisible,
   });
 }
@@ -413,7 +430,14 @@ export function showPrecisionTerminalUi(player: Player, block: Block): void {
     listActiveDeposits(network.id).filter((request) => locEquals(request.terminal, block.location))
   );
 
-  setupSettingsTab(form, isSettingsTab, dimension, block.location, terminalName ?? "");
+  setupSettingsTab(
+    form,
+    isSettingsTab,
+    dimension,
+    block.location,
+    terminalName ?? "",
+    getPrecisionCollectUnspecified(dimension, block.location)
+  );
 
   form
     .show()

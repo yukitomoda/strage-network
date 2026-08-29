@@ -16,6 +16,7 @@ const STOCK_TARGETS_PROPERTY = "wh:stock_targets";
 const AUTO_DEPOSIT_PROPERTY = "wh:auto_deposit";
 const INVENTORY_AUTO_DEPOSIT_PROPERTY = "wh:inventory_auto_deposit";
 const PRECISION_SLOTS_PROPERTY = "wh:precision_slots";
+const PRECISION_COLLECT_UNSPECIFIED_PROPERTY = "wh:precision_collect_unspecified";
 const PAD_TARGETS_PROPERTY = "wh:pad_targets";
 const PAD_MODE_PROPERTY = "wh:pad_mode";
 const OWNER_LOCATION_PROPERTY = "wh:owner_loc";
@@ -161,6 +162,19 @@ export function getPrecisionSlots(dimension: Dimension, terminalLoc: Vector3): P
 
 export function setPrecisionSlots(dimension: Dimension, terminalLoc: Vector3, slots: PrecisionSlotLine[]): void {
   ensureEntity(dimension, terminalLoc).setDynamicProperty(PRECISION_SLOTS_PROPERTY, JSON.stringify(slots));
+}
+
+// 精密ターミナルの「未指定スロットを回収する」設定(ユーザー要望)。ONの間、どのルールにも
+// 含まれていないスロットは常に目標なし+回収ONのルールが設定されているものとして扱う
+// (=常に空にしようとする)。デフォルトはfalse(在庫管理ターミナルの自動預け入れ同様、
+// 意図せずアタッチ先の物を全部持っていかれる事故を避けるため、明示的にONにする方式)。
+export function getPrecisionCollectUnspecified(dimension: Dimension, terminalLoc: Vector3): boolean {
+  const value = findSettingsEntity(dimension, terminalLoc)?.getDynamicProperty(PRECISION_COLLECT_UNSPECIFIED_PROPERTY);
+  return typeof value === "boolean" ? value : false; // デフォルトfalse
+}
+
+export function setPrecisionCollectUnspecified(dimension: Dimension, terminalLoc: Vector3, value: boolean): void {
+  ensureEntity(dimension, terminalLoc).setDynamicProperty(PRECISION_COLLECT_UNSPECIFIED_PROPERTY, value);
 }
 
 // 搬入出パッドの「プレイヤーがパッドの上で維持したい所持数」リスト。他のターミナルは使わない。
