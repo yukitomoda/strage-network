@@ -1,5 +1,6 @@
 import { Dimension, Vector3 } from "@minecraft/server";
 import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
+import { getNetworkCatalogCached } from "./networkCatalogCache";
 import { startCycleAlignedLoop } from "./networkProcessing";
 import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { CatalogEntry, scanContainerCatalog } from "./storageScan";
@@ -33,7 +34,7 @@ function checkNetworkAutoTerminals(network: NetworkData, dimension: Dimension): 
     const catalog = container ? scanContainerCatalog(container) : [];
 
     if (wishlist.length > 0) {
-      checkShortfalls(network, terminalLoc, wishlist, catalog);
+      checkShortfalls(network, dimension, terminalLoc, wishlist, catalog);
     }
     if (autoDeposit) {
       checkExcess(network, terminalLoc, wishlist, catalog);
@@ -44,11 +45,14 @@ function checkNetworkAutoTerminals(network: NetworkData, dimension: Dimension): 
 // 目標を下回っている品目を引き出しする(従来の「自動引き出し」相当)。
 function checkShortfalls(
   network: NetworkData,
+  dimension: Dimension,
   terminalLoc: Vector3,
   wishlist: WishlistLine[],
   catalog: CatalogEntry[]
 ): void {
-  const lines: OrderLine[] = [];
+  // アタッチ先の不足数だけで即submitOrderせず、いったん候補として集める。ネットワーク在庫の
+  // 確認(scanCatalog、コストが高い)は候補が実際にある時だけ行いたいため。
+  const candidates: { wish: WishlistLine; shortfall: number }[] = [];
   for (const wish of wishlist) {
     const current =
       catalog.find((e) => e.key.typeId === wish.itemTypeId && (e.key.name ?? "") === (wish.itemName ?? ""))?.total ??
@@ -56,11 +60,28 @@ function checkShortfalls(
     const shortfall = wish.targetAmount - current;
     if (shortfall <= 0) continue;
     if (hasPendingOrderFor(network.id, terminalLoc, wish.itemTypeId, wish.itemName)) continue;
+    candidates.push({ wish, shortfall });
+  }
+  if (candidates.length === 0) return;
+
+  // ネットワークに実際に無い(または明らかに足りない)品目は、注文しても搬入先解決時に
+  // shortfallとして即終了するだけの無駄な注文になる(次のチェック周期でまた同じ注文を出し
+  // 続けてしまう)。ここで初めてネットワーク在庫(networkCatalogCache.ts、tickごとに
+  // キャッシュ)を確認し、要求量を実在庫にクランプする(完全な保証ではなく目安。処理までの
+  // 間に他ターミナルが同時に消費してズレることは許容する。ユーザー要望)。
+  const networkCatalog = getNetworkCatalogCached(dimension, network);
+  const lines: OrderLine[] = [];
+  for (const { wish, shortfall } of candidates) {
+    const availableInNetwork =
+      networkCatalog.find((e) => e.key.typeId === wish.itemTypeId && (e.key.name ?? "") === (wish.itemName ?? ""))
+        ?.total ?? 0;
+    const requestAmount = Math.min(shortfall, availableInNetwork);
+    if (requestAmount <= 0) continue;
 
     lines.push({
       itemTypeId: wish.itemTypeId,
       itemName: wish.itemName,
-      requested: shortfall,
+      requested: requestAmount,
       delivered: 0,
       exhausted: false,
     });

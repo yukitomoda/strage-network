@@ -1,5 +1,6 @@
 import { Dimension, Player, Vector3 } from "@minecraft/server";
 import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
+import { getNetworkCatalogCached } from "./networkCatalogCache";
 import { startCycleAlignedLoop } from "./networkProcessing";
 import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
 import { CatalogEntry, scanContainerCatalog } from "./storageScan";
@@ -44,7 +45,7 @@ function checkNetworkPads(network: NetworkData, dimension: Dimension): void {
     for (const player of playersStandingOn(dimension, padLoc)) {
       const inventory = player.getComponent("inventory")?.container;
       if (!inventory) continue;
-      checkPlayer(network, padLoc, player.name, mode, targets, scanContainerCatalog(inventory));
+      checkPlayer(network, dimension, padLoc, player.name, mode, targets, scanContainerCatalog(inventory));
     }
   }
 }
@@ -58,14 +59,17 @@ function checkNetworkPads(network: NetworkData, dimension: Dimension): void {
 // インベントリ)を解決する際にplayerNameから本人を再検索するため、ここで正しく持たせる必要がある。
 function checkPlayer(
   network: NetworkData,
+  dimension: Dimension,
   padLoc: Vector3,
   playerName: string,
   mode: PadMode,
   targets: PadTargetLine[],
   catalog: CatalogEntry[]
 ): void {
-  const orderLines: OrderLine[] = [];
   const depositLines: DepositLine[] = [];
+  // 引き出し候補はいったん集める。ネットワーク在庫の確認(scanCatalog、コストが高い)は
+  // 候補が実際にある時だけ行いたいため(autoOrderCheck.tsのcheckShortfallsと同じ理由)。
+  const orderCandidates: { target: PadTargetLine; shortfall: number }[] = [];
 
   for (const target of targets) {
     const current =
@@ -85,15 +89,31 @@ function checkPlayer(
     } else if (current < target.targetAmount && mode !== "deposit_only") {
       const shortfall = target.targetAmount - current;
       if (hasPendingOrderFor(network.id, padLoc, target.itemTypeId, target.itemName)) continue;
+      orderCandidates.push({ target, shortfall });
+    }
+    // current === targetAmount の場合は何もしない(安定状態)。
+  }
+
+  const orderLines: OrderLine[] = [];
+  if (orderCandidates.length > 0) {
+    // ネットワークに実際に無い(または明らかに足りない)品目は注文しない(autoOrderCheck.tsの
+    // checkShortfallsと同じ理由・同じ手法。ユーザー要望)。
+    const networkCatalog = getNetworkCatalogCached(dimension, network);
+    for (const { target, shortfall } of orderCandidates) {
+      const availableInNetwork =
+        networkCatalog.find(
+          (e) => e.key.typeId === target.itemTypeId && (e.key.name ?? "") === (target.itemName ?? "")
+        )?.total ?? 0;
+      const requestAmount = Math.min(shortfall, availableInNetwork);
+      if (requestAmount <= 0) continue;
       orderLines.push({
         itemTypeId: target.itemTypeId,
         itemName: target.itemName,
-        requested: shortfall,
+        requested: requestAmount,
         delivered: 0,
         exhausted: false,
       });
     }
-    // current === targetAmount の場合は何もしない(安定状態)。
   }
 
   if (orderLines.length > 0) {

@@ -2,8 +2,9 @@ import { Block, Dimension, Vector3 } from "@minecraft/server";
 import { hasPendingDepositFor, submitDeposit } from "./depositProcessing";
 import { startCycleAlignedLoop } from "./networkProcessing";
 import { hasPendingOrderFor, submitOrder } from "./orderProcessing";
+import { getNetworkCatalogCached } from "./networkCatalogCache";
 import { DepositLine, NetworkData, OrderLine, StockTargetLine } from "./state";
-import { CatalogEntry, scanCatalog, scanContainerCatalog } from "./storageScan";
+import { CatalogEntry, scanContainerCatalog } from "./storageScan";
 import { getAttachedStorageLocation, INVENTORY_TERMINAL_BLOCK_ID, isRedstoneLocked } from "./terminalBlock";
 import { getInventoryAutoDeposit, getStockTargets } from "./terminalSettings";
 
@@ -28,8 +29,9 @@ function checkNetworkInventoryTerminals(network: NetworkData, dimension: Dimensi
 
   // 自動端末(アタッチ先1個だけをスキャン)と違い、判定にネットワーク全体の在庫数が必要なため、
   // scanCatalogはコストが高い。このネットワーク分だけ1回スキャンして全ターミナルで使い回す
-  // (depositProcessing.tsのbuildStorageIndexと同じ考え方)。
-  const networkCatalog = scanCatalog(dimension, network);
+  // (depositProcessing.tsのbuildStorageIndexと同じ考え方)。tickをまたいだ重複走査の防止は
+  // networkCatalogCache.ts参照(他の3種の定期チェックとも共有する)。
+  const networkCatalog = getNetworkCatalogCached(dimension, network);
 
   for (const { loc: terminalLoc, block } of inventoryTerminals) {
     if (isRedstoneLocked(block)) continue;

@@ -1,5 +1,6 @@
 import { Container, Dimension, Vector3 } from "@minecraft/server";
 import { hasPendingSlotDepositFor, submitDeposit } from "./depositProcessing";
+import { getNetworkCatalogCached } from "./networkCatalogCache";
 import { startCycleAlignedLoop } from "./networkProcessing";
 import { hasPendingSlotOrderFor, submitOrder } from "./orderProcessing";
 import { NetworkData, PrecisionSlotLine } from "./state";
@@ -30,7 +31,7 @@ function checkNetworkPrecisionTerminals(network: NetworkData, dimension: Dimensi
     if (!container) continue;
 
     for (const rule of slots) {
-      checkSlot(network, terminalLoc, container, rule);
+      checkSlot(network, dimension, terminalLoc, container, rule);
     }
   }
 }
@@ -46,7 +47,13 @@ function checkNetworkPrecisionTerminals(network: NetworkData, dimension: Dimensi
 // その場合は余剰が発生しない(余剰 = 現在数 - 目標 <= 0)ため回収も発生しない。
 // 品目が目標と一致しない場合は補充を行わず(上書きしない、安全側)、collectがtrueなら
 // その場で全量回収する。回収でスロットが空になれば、次回のチェックで正しい品目の補充が始まる。
-function checkSlot(network: NetworkData, terminalLoc: Vector3, container: Container, rule: PrecisionSlotLine): void {
+function checkSlot(
+  network: NetworkData,
+  dimension: Dimension,
+  terminalLoc: Vector3,
+  container: Container,
+  rule: PrecisionSlotLine
+): void {
   const current = container.getItem(rule.slotIndex);
   const hasTarget = rule.targetAmount > 0 && rule.itemTypeId !== undefined;
   const matchesTarget =
@@ -55,16 +62,26 @@ function checkSlot(network: NetworkData, terminalLoc: Vector3, container: Contai
   if (hasTarget && (current === undefined || matchesTarget)) {
     const shortfall = rule.targetAmount - (current?.amount ?? 0);
     if (shortfall > 0 && !hasPendingSlotOrderFor(network.id, terminalLoc, rule.slotIndex)) {
-      submitOrder(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, [
-        {
-          itemTypeId: rule.itemTypeId as string,
-          itemName: rule.itemName,
-          requested: shortfall,
-          delivered: 0,
-          exhausted: false,
-          slotIndex: rule.slotIndex,
-        },
-      ]);
+      // ネットワークに実際に無い(または明らかに足りない)品目は注文しない(autoOrderCheck.tsの
+      // checkShortfallsと同じ理由・同じ手法。ユーザー要望)。
+      const networkCatalog = getNetworkCatalogCached(dimension, network);
+      const availableInNetwork =
+        networkCatalog.find(
+          (e) => e.key.typeId === rule.itemTypeId && (e.key.name ?? "") === (rule.itemName ?? "")
+        )?.total ?? 0;
+      const requestAmount = Math.min(shortfall, availableInNetwork);
+      if (requestAmount > 0) {
+        submitOrder(network.id, terminalLoc, AUTO_ORDER_PLAYER_NAME, [
+          {
+            itemTypeId: rule.itemTypeId as string,
+            itemName: rule.itemName,
+            requested: requestAmount,
+            delivered: 0,
+            exhausted: false,
+            slotIndex: rule.slotIndex,
+          },
+        ]);
+      }
     }
   }
 
