@@ -102,7 +102,7 @@ function handleControllerUse(player: Player, dimension: Dimension, block: Block)
   syncRangeIndicator(dimension, network, true);
   const modeHint =
     getToolMode(player) === "drain"
-      ? "ストレージをShiftキーを押しながら右クリックしてDrain指定を切り替えてください。"
+      ? "ストレージをShiftキーを押しながら右クリックして格納禁止指定を切り替えてください。"
       : "ストレージ/ターミナルをShiftキーを押しながら右クリックして接続/切断してください。";
   player.sendMessage(`§bネットワーク編集を開始しました。${modeHint}再度コントローラをShiftキーを押しながら右クリックすると終了します。`);
 }
@@ -234,8 +234,8 @@ function handleDrainModeUse(player: Player, dimension: Dimension, block: Block, 
 
   player.sendMessage(
     newValue
-      ? "§eこのストレージをDrain対象に指定しました。"
-      : "§bこのストレージのDrain指定を解除しました。"
+      ? "§eこのストレージを格納禁止に指定しました。"
+      : "§bこのストレージの格納禁止指定を解除しました。"
   );
 }
 

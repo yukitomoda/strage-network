@@ -5,7 +5,7 @@ import { getToolMode, setToolMode, ToolMode } from "./toolMode";
 
 const MODE_LABELS: Record<ToolMode, string> = {
   build: "ネットワーク構築",
-  drain: "Drain指定",
+  drain: "格納禁止指定",
 };
 
 const MODE_DESCRIPTIONS: Record<ToolMode, string> = {
