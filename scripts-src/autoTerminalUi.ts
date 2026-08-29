@@ -124,6 +124,7 @@ function setupWishlistTab(
   form.label("設定した数量を維持するように自動で引き出しします。", { visible: tabVisible });
   const { amount: targetAmount, isEmptySelected } = setupQuantitySlider(form, "維持したい数量", tabVisible, {
     emptyOption: true,
+    signSource: increaseMode,
   });
   form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: isEmptySelected });
   form.textField("検索", searchText, { visible: tabVisible });

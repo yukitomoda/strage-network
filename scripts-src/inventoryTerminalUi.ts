@@ -124,6 +124,7 @@ function setupStockTargetTab(
   );
   const { amount: targetAmount, isEmptySelected } = setupQuantitySlider(form, "維持したい在庫数", tabVisible, {
     emptyOption: true,
+    signSource: increaseMode,
   });
   form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: isEmptySelected });
   form.textField("検索", searchText, { visible: tabVisible });

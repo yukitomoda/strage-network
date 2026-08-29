@@ -40,33 +40,49 @@ function valueAtIndex(index: number): number {
   return QUANTITY_STEPS[index] ?? QUANTITY_STEPS[QUANTITY_STEPS.length - 1];
 }
 
-function labelText(label: string, value: number, isEmpty: boolean): string {
-  return isEmpty ? `${label}: 空に設定` : `${label}: ${value}`;
+// isIncreaseは「増やす/減らす」トグルと連動する符号表示(ユーザー要望)。呼び出し元がそのトグルを
+// 持たない(precisionTerminalUi.ts等、目標を直接上書きするだけで増減の概念が無い)場合は
+// undefinedのままにし、符号無しの従来通りの表示にする。空に設定は増減ではなく絶対値への上書きの
+// ため、符号は付けない。
+function labelText(label: string, value: number, isEmpty: boolean, isIncrease: boolean | undefined): string {
+  if (isEmpty) return `${label}: 空に設定`;
+  const sign = isIncrease === undefined ? "" : isIncrease ? "+" : "-";
+  return `${label}: ${sign}${value}`;
 }
 
 export function setupQuantitySlider(
   form: CustomForm,
   label: string,
   tabVisible: ObservableBoolean,
-  options?: { emptyOption?: boolean }
+  options?: { emptyOption?: boolean; signSource?: ObservableBoolean }
 ): QuantitySliderResult {
   const minIndex = options?.emptyOption ? EMPTY_STEP_INDEX : 0;
   const maxIndex = QUANTITY_STEPS.length - 1;
   const defaultIndex = QUANTITY_STEPS.indexOf(64);
+  const signSource = options?.signSource;
 
   const stepIndex = new ObservableNumber(defaultIndex, { clientWritable: true });
   const initialValue = valueAtIndex(defaultIndex);
   const amount = new ObservableNumber(initialValue);
   const isEmptySelected = new ObservableBoolean(initialValue === EMPTY_STEP_VALUE);
-  const sliderLabel = new ObservableString(labelText(label, initialValue, isEmptySelected.getData()));
+  const sliderLabel = new ObservableString(
+    labelText(label, initialValue, isEmptySelected.getData(), signSource?.getData())
+  );
+
+  const refreshLabel = (value: number, isEmpty: boolean) => {
+    sliderLabel.setData(labelText(label, value, isEmpty, signSource?.getData()));
+  };
 
   stepIndex.subscribe((index) => {
     const value = valueAtIndex(Math.round(index));
     const isEmpty = value === EMPTY_STEP_VALUE;
     amount.setData(value);
     isEmptySelected.setData(isEmpty);
-    sliderLabel.setData(labelText(label, value, isEmpty));
+    refreshLabel(value, isEmpty);
   });
+
+  // 「増やす/減らす」トグル側が切り替わった時も符号表示を更新する。
+  signSource?.subscribe(() => refreshLabel(amount.getData(), isEmptySelected.getData()));
 
   form.slider(sliderLabel, stepIndex, minIndex, maxIndex, {
     step: 1,

@@ -145,6 +145,7 @@ function setupPadTargetTab(
   form.label("パッドの上に乗った時に維持したい所持数を設定します。", { visible: tabVisible });
   const { amount: targetAmount, isEmptySelected } = setupQuantitySlider(form, "維持したい所持数", tabVisible, {
     emptyOption: true,
+    signSource: increaseMode,
   });
   form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: isEmptySelected });
   form.textField("検索", searchText, { visible: tabVisible });
