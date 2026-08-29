@@ -157,7 +157,7 @@ function setupSlotRuleTab(
   form.toggle("回収", collect, {
     visible: tabVisible,
   });
-  const targetAmount = setupQuantitySlider(form, "維持したい数量", tabVisible);
+  const { amount: targetAmount } = setupQuantitySlider(form, "維持したい数量", tabVisible);
   form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果(タップで指定スロットに設定)", { visible: tabVisible });

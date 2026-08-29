@@ -45,10 +45,6 @@ function setupStockTargetTab(
   const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // ON: 増やす / OFF: 減らす
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
-  // ONの間、検索結果のタップは増減ではなく目標在庫数を0に設定する(在庫が無くなるまで
-  // 引き出し続ける「空にする」指定)。増やす/減らすの操作と同時に意味を持たせると混乱するため、
-  // ONの間は「増やす」トグルを無効化する。
-  const emptyMode = new ObservableBoolean(false, { clientWritable: true });
 
   const searchLabels: ObservableUIRawMessage[] = [];
   const searchVisible: ObservableBoolean[] = [];
@@ -126,11 +122,10 @@ function setupStockTargetTab(
     "指定した在庫数を維持するように自動で引き出し・預け入れを行います。",
     { visible: tabVisible }
   );
-  const targetAmount = setupQuantitySlider(form, "維持したい在庫数", tabVisible, { disabled: emptyMode });
-  form.toggle("空に設定", emptyMode, {
-    visible: tabVisible,
+  const { amount: targetAmount, isEmptySelected } = setupQuantitySlider(form, "維持したい在庫数", tabVisible, {
+    emptyOption: true,
   });
-  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: emptyMode });
+  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: isEmptySelected });
   form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果", { visible: tabVisible });
@@ -173,7 +168,7 @@ function setupStockTargetTab(
           (l) => l.itemTypeId === entry.key.typeId && (l.itemName ?? "") === (entry.key.name ?? "")
         );
 
-        if (emptyMode.getData()) {
+        if (isEmptySelected.getData()) {
           if (existingIndex !== -1) {
             targets[existingIndex].targetAmount = 0;
           } else {

@@ -69,11 +69,6 @@ function setupPadTargetTab(
   const increaseMode = new ObservableBoolean(true, { clientWritable: true }); // ON: 増やす / OFF: 減らす
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
-  // ONの間、検索結果のタップは増減ではなく目標所持数を0に設定する(在庫管理ターミナルの
-  // setupStockTargetTabと同じ「空に設定」パターン。プレイヤーがこのパッドに乗っている間、
-  // その品目を持ち歩かず常に預け入れる指定になる)。増やす/減らすの操作と同時に意味を
-  // 持たせると混乱するため、ONの間は「増やす/減らす」トグルを無効化する。
-  const emptyMode = new ObservableBoolean(false, { clientWritable: true });
 
   const searchLabels: ObservableUIRawMessage[] = [];
   const searchVisible: ObservableBoolean[] = [];
@@ -148,11 +143,10 @@ function setupPadTargetTab(
   });
 
   form.label("パッドの上に乗った時に維持したい所持数を設定します。", { visible: tabVisible });
-  const targetAmount = setupQuantitySlider(form, "維持したい所持数", tabVisible, { disabled: emptyMode });
-  form.toggle("空に設定", emptyMode, {
-    visible: tabVisible,
+  const { amount: targetAmount, isEmptySelected } = setupQuantitySlider(form, "維持したい所持数", tabVisible, {
+    emptyOption: true,
   });
-  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: emptyMode });
+  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: isEmptySelected });
   form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果", { visible: tabVisible });
@@ -185,7 +179,7 @@ function setupPadTargetTab(
           (l) => l.itemTypeId === entry.key.typeId && (l.itemName ?? "") === (entry.key.name ?? "")
         );
 
-        if (emptyMode.getData()) {
+        if (isEmptySelected.getData()) {
           if (existingIndex !== -1) {
             targets[existingIndex].targetAmount = 0;
           } else {

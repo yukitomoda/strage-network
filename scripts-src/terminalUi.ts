@@ -98,7 +98,7 @@ function setupTab(
   const increaseModeLabel = new ObservableString(increaseMode.getData() ? "増やす" : "減らす");
   increaseMode.subscribe((isIncrease) => increaseModeLabel.setData(isIncrease ? "増やす" : "減らす"));
 
-  const quantity = setupQuantitySlider(form, "数量", tabVisible);
+  const { amount: quantity } = setupQuantitySlider(form, "数量", tabVisible);
   form.toggle(increaseModeLabel, increaseMode, {
     visible: tabVisible,
   });

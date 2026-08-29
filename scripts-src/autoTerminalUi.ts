@@ -122,8 +122,10 @@ function setupWishlistTab(
   });
 
   form.label("設定した数量を維持するように自動で引き出しします。", { visible: tabVisible });
-  const targetAmount = setupQuantitySlider(form, "維持したい数量", tabVisible);
-  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible });
+  const { amount: targetAmount, isEmptySelected } = setupQuantitySlider(form, "維持したい数量", tabVisible, {
+    emptyOption: true,
+  });
+  form.toggle(increaseModeLabel, increaseMode, { visible: tabVisible, disabled: isEmptySelected });
   form.textField("検索", searchText, { visible: tabVisible });
   form.divider({ visible: tabVisible });
   form.label("検索結果", { visible: tabVisible });
@@ -162,10 +164,23 @@ function setupWishlistTab(
       () => {
         const entry = filtered[i];
         if (!entry) return;
-        const amount = Math.max(1, Math.floor(targetAmount.getData()));
         const existingIndex = wishlist.findIndex(
           (l) => l.itemTypeId === entry.key.typeId && (l.itemName ?? "") === (entry.key.name ?? "")
         );
+
+        if (isEmptySelected.getData()) {
+          if (existingIndex !== -1) {
+            wishlist[existingIndex].targetAmount = 0;
+          } else {
+            wishlist.push({ itemTypeId: entry.key.typeId, itemName: entry.key.name, targetAmount: 0 });
+          }
+          setWishlist(dimension, terminalLoc, wishlist);
+          label.setData(searchRowMessage(entry));
+          refreshCurrent();
+          return;
+        }
+
+        const amount = Math.max(1, Math.floor(targetAmount.getData()));
 
         if (!increaseMode.getData()) {
           if (existingIndex === -1) return; // リストに無い品目は減らせない

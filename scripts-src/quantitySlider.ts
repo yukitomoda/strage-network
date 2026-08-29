@@ -4,38 +4,74 @@ import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } fro
 // inventoryTerminalUi.ts/precisionTerminalUi.ts/ioPadUi.ts)がそれぞれmin=1,max=64,step=1の
 // 線形スライダーを個別に実装していたが、「毎回スライダーを細かく操作するのが面倒」「細かく
 // 動かすより連打した方が速い」というユーザー指摘を受け、2のべき乗(1,2,4,...,1024)の11段階だけを
-// 選べる形に統一した(ユーザー要望)。
+// 選べる形に統一した。
 //
 // DDUIのslider()はmin/max/stepいずれも数値で線形刻みしか表現できず、2のべき乗のような等比数列を
-// 直接表現する手段が無い。そのため内部的には0〜(QUANTITY_STEPS.length-1)のインデックスを
-// スライダー本体に束縛し(段数が64→11に減るため、位置合わせに必要なドラッグの精度自体も下がる)、
-// 呼び出し元へ返す値(実際に増減に使う個数)はそこから計算する。スライダーのラベルは実際の個数を
-// 含む形に動的更新する(トグルの「増やす/減らす」ラベルと同じ、Observableのsubscribeでテキスト
-// 自体を書き換えるパターン)。
+// 直接表現する手段が無い。そのため内部的にはインデックスをスライダー本体に束縛し(段数が64→11
+// 段階に減るため、位置合わせに必要なドラッグの精度自体も下がる)、呼び出し元へ返す値(実際に
+// 増減に使う個数)はそこから計算する。QUANTITY_STEPS[n] === 2^n となるようインデックスnをそのまま
+// 指数として使えるようにしており(emptyOption併用時もこの対応関係はズレない、後述)、スライダーの
+// ラベルは実際の個数を含む形に動的更新する(トグルの「増やす/減らす」ラベルと同じ、Observableの
+// subscribeでテキスト自体を書き換えるパターン)。
 export const QUANTITY_STEPS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
-const DEFAULT_STEP_INDEX = QUANTITY_STEPS.indexOf(64);
+
+// 在庫管理ターミナル/搬入出パッドが持っていた「空に設定」トグル(検索結果のタップの意味を
+// 増減ではなく目標を0への直接上書きに切り替える)を、スライダーの一番左のステップに統合した
+// (ユーザー要望)。0は通常のステップに絶対現れない値(QUANTITY_STEPSの最小は1)なので、
+// amountが0であること自体を「空に設定が選ばれている」の判定に使える。
+//
+// 配列の先頭に追加する(インデックス0にする)実装も考えられるが、それだと以降の全ステップが
+// 1つずつインデックスとズレる(QUANTITY_STEPS[n]が2^nではなく2^(n-1)になる)。「表示される数字が
+// 2^nとズレるのが気持ち悪い」という指摘を受け、代わりに空に設定を**インデックス-1**として扱う
+// (スライダーのminを-1にする)ことで、通常ステップのインデックスと指数の対応(QUANTITY_STEPS[n]
+// === 2^n)を保ったままにした。
+const EMPTY_STEP_VALUE = 0;
+const EMPTY_STEP_INDEX = -1;
+
+export type QuantitySliderResult = {
+  // 空に設定が選ばれている間は0になる(emptyOption未指定なら常に通常の個数のみ)。
+  amount: ObservableNumber;
+  // 空に設定が選ばれているか。emptyOption未指定なら常にfalseのまま変化しない。
+  isEmptySelected: ObservableBoolean;
+};
+
+function valueAtIndex(index: number): number {
+  if (index < 0) return EMPTY_STEP_VALUE;
+  return QUANTITY_STEPS[index] ?? QUANTITY_STEPS[QUANTITY_STEPS.length - 1];
+}
+
+function labelText(label: string, value: number, isEmpty: boolean): string {
+  return isEmpty ? `${label}: 空に設定` : `${label}: ${value}`;
+}
 
 export function setupQuantitySlider(
   form: CustomForm,
   label: string,
   tabVisible: ObservableBoolean,
-  options?: { disabled?: ObservableBoolean }
-): ObservableNumber {
-  const stepIndex = new ObservableNumber(DEFAULT_STEP_INDEX, { clientWritable: true });
-  const amount = new ObservableNumber(QUANTITY_STEPS[DEFAULT_STEP_INDEX]);
-  const sliderLabel = new ObservableString(`${label}: ${amount.getData()}`);
+  options?: { emptyOption?: boolean }
+): QuantitySliderResult {
+  const minIndex = options?.emptyOption ? EMPTY_STEP_INDEX : 0;
+  const maxIndex = QUANTITY_STEPS.length - 1;
+  const defaultIndex = QUANTITY_STEPS.indexOf(64);
+
+  const stepIndex = new ObservableNumber(defaultIndex, { clientWritable: true });
+  const initialValue = valueAtIndex(defaultIndex);
+  const amount = new ObservableNumber(initialValue);
+  const isEmptySelected = new ObservableBoolean(initialValue === EMPTY_STEP_VALUE);
+  const sliderLabel = new ObservableString(labelText(label, initialValue, isEmptySelected.getData()));
 
   stepIndex.subscribe((index) => {
-    const value = QUANTITY_STEPS[Math.round(index)] ?? QUANTITY_STEPS[QUANTITY_STEPS.length - 1];
+    const value = valueAtIndex(Math.round(index));
+    const isEmpty = value === EMPTY_STEP_VALUE;
     amount.setData(value);
-    sliderLabel.setData(`${label}: ${value}`);
+    isEmptySelected.setData(isEmpty);
+    sliderLabel.setData(labelText(label, value, isEmpty));
   });
 
-  form.slider(sliderLabel, stepIndex, 0, QUANTITY_STEPS.length - 1, {
+  form.slider(sliderLabel, stepIndex, minIndex, maxIndex, {
     step: 1,
     visible: tabVisible,
-    disabled: options?.disabled,
   });
 
-  return amount;
+  return { amount, isEmptySelected };
 }
