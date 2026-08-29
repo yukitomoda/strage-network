@@ -62,6 +62,11 @@ function setupSlotRuleTab(
   const currentTooltips: ObservableUIRawMessage[] = [];
   const currentVisible: ObservableBoolean[] = [];
 
+  // スロット重複警告(ユーザー要望、防止はしない。docs/design.md 24章参照)。
+  const overlapWarningVisible = new ObservableBoolean(false);
+  const overlapWarningLabel = new ObservableUIRawMessage({ text: "" });
+  const overlapWarningTooltip = new ObservableUIRawMessage({ text: "" });
+
   // 設定したスロットが、アタッチ先コンテナに実在しない場合の警告理由。UIを開いた時点の
   // コンテナサイズ(attachedContainerSize)でチェックする(コンテナの種類によってスロット数が
   // 異なるため。例: かまど=3、クラフター=9、チェスト=27)。搬入出そのものは失敗するだけで
@@ -94,6 +99,45 @@ function setupSlotRuleTab(
     return sortedA.every((v, i) => v === sortedB[i]);
   }
 
+  // 異なるエントリ同士が物理的に同じスロットを含んでいないか(24章で「防止・警告は実装しない」
+  // としていたが、警告だけは出してほしいというユーザー要望)。防止はしない(奪い合いの挙動自体は
+  // 変えない)。スロット番号 -> それを含むエントリの配列、を返す(重複が無ければ空)。
+  function findOverlaps(): Map<number, PrecisionSlotLine[]> {
+    const bySlot = new Map<number, PrecisionSlotLine[]>();
+    for (const rule of slots) {
+      for (const slotIndex of rule.slotIndices) {
+        const list = bySlot.get(slotIndex);
+        if (list) list.push(rule);
+        else bySlot.set(slotIndex, [rule]);
+      }
+    }
+    const overlaps = new Map<number, PrecisionSlotLine[]>();
+    for (const [slotIndex, rules] of bySlot) {
+      if (rules.length > 1) overlaps.set(slotIndex, rules);
+    }
+    return overlaps;
+  }
+
+  // 警告ラベルは概要(重複しているスロット番号)のみ、詳細(どのエントリ同士が重複しているか)は
+  // Tooltip側に出す(ユーザー要望)。ボタンのラベルには§書式コードが効かないため概要側は無色。
+  function refreshOverlapWarning(): void {
+    const overlaps = findOverlaps();
+    if (overlaps.size === 0) {
+      overlapWarningVisible.setData(false);
+      return;
+    }
+    const overlappingSlots = [...overlaps.keys()].sort((a, b) => a - b);
+    overlapWarningLabel.setData({ text: `⚠ スロットが重複しています: ${formatSlotRange(overlappingSlots)}` });
+    const detailLines = overlappingSlots.map((slotIndex) => {
+      const ranges = overlaps.get(slotIndex)!.map((rule) => formatSlotRange(rule.slotIndices));
+      return `スロット${slotIndex}: ${ranges.join(" と ")}`;
+    });
+    overlapWarningTooltip.setData({
+      text: `§c同じスロットが複数のエントリに含まれています。搬入出が競合する可能性があります。\n${detailLines.join("\n")}`,
+    });
+    overlapWarningVisible.setData(true);
+  }
+
   function upsertSlot(line: PrecisionSlotLine): void {
     const existingIndex = slots.findIndex((s) => sameSlots(s.slotIndices, line.slotIndices));
     if (existingIndex === -1 && slots.length >= MAX_SLOT_LINES) return; // 上限超過は無視
@@ -101,6 +145,7 @@ function setupSlotRuleTab(
     else slots.push(line);
     setPrecisionSlots(dimension, terminalLoc, slots);
     refreshCurrent();
+    refreshOverlapWarning();
   }
 
   // 「1」「1,2,3」「1-3」「1,3-5,7」のような書式をパースする(slotRange.ts参照)。不正な入力は
@@ -168,14 +213,17 @@ function setupSlotRuleTab(
     if (active) {
       refreshSearch();
       refreshCurrent();
+      refreshOverlapWarning();
     } else {
       hasPrevPage.setData(false);
       hasNextPage.setData(false);
       showPageLabel.setData(false);
+      overlapWarningVisible.setData(false);
     }
   });
 
   form.label("スロット番号を指定して、維持したいアイテムと数量を設定します。", { visible: tabVisible });
+  form.button(overlapWarningLabel, () => {}, { visible: overlapWarningVisible, tooltip: overlapWarningTooltip });
   form.textField("スロット番号", slotNumberText, {
     description: "例: 1 / 1,2,3 / 1-3 / 1,3-5,7(複数指定時は各スロットへ均等に分配します)",
     visible: tabVisible,
@@ -259,6 +307,7 @@ function setupSlotRuleTab(
         slots = slots.filter((l) => l !== line);
         setPrecisionSlots(dimension, terminalLoc, slots);
         refreshCurrent();
+        refreshOverlapWarning();
       },
       { visible, tooltip }
     );
@@ -284,6 +333,7 @@ function setupSlotRuleTab(
   if (tabVisible.getData()) {
     refreshSearch();
     refreshCurrent();
+    refreshOverlapWarning();
   }
 }
 
