@@ -1,6 +1,8 @@
 import { Player } from "@minecraft/server";
 import { CustomForm } from "@minecraft/server-ui";
 import { endEditingSession, getEditingNetworkId } from "./editingSession";
+import { syncMemberHighlight } from "./memberHighlight";
+import { getNetwork } from "./network";
 import { getToolMode, setToolMode, ToolMode } from "./toolMode";
 
 const MODE_LABELS: Record<ToolMode, string> = {
@@ -24,6 +26,13 @@ export function showToolModeUi(player: Player): void {
   for (const mode of Object.keys(MODE_LABELS) as ToolMode[]) {
     form.button(MODE_LABELS[mode], () => {
       setToolMode(player, mode);
+      // 編集セッション中にモードを切り替えた場合、メンバーハイライトの色分け(構築/Drain)も
+      // その場で追従させる(次のwrench.tsの定期同期を待たずに済むように)。
+      const editingNetworkId = getEditingNetworkId(player);
+      if (editingNetworkId !== undefined) {
+        const network = getNetwork(editingNetworkId);
+        if (network) syncMemberHighlight(player.dimension, network, mode);
+      }
       player.sendMessage(`§bレンチのモードを「${MODE_LABELS[mode]}」に切り替えました。`);
       form.close();
     }, { disabled: mode === current, tooltip: MODE_DESCRIPTIONS[mode] });

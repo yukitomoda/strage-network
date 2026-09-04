@@ -1044,3 +1044,26 @@ vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、e
 - **見た目**(`BP/blocks/suction_pad.json`/`tools/generate-placeholder-icon.mjs`): 回収範囲が常に真上(20章参照、向きの概念を持たない)固定であることに合わせ、渦模様は上面だけに出す(ユーザー指摘: 「ネットワークオブザーバーとは異なり、常に上面だけが対象なので、どのようにおいても上面だけでよい」)。ネットワークオブザーバーは信号を出す面が回転する(Box UVで面ごとに描画を切り替える専用ジオメトリ`network_observer.geo.json`が必要だった)のに対し、吸い込みパッドは`minecraft:geometry.full_block`のまま`minecraft:material_instances`に`"up"`だけ別テクスチャ(`wh:suction_pad_top`)を指定するだけで済み、専用ジオメトリやBox UVの回転対応は不要だった。側面/底面は`"*"`(`wh:suction_pad_side`)で、上面と同じ枠(ベベル+四隅のリベット)だけの無地にし、渦模様(中心へ向かうほど明るくなる同心リング、琥珀色。搬入出パッドのローズ/ティールの二重リングとは色調で見分けが付く)は上面にのみ描く。
 - **レシピ**(`BP/recipes/suction_pad.json`、ユーザー指定): 縦一列にホッパー(上)・自動端末(中央)・レッドストーンパウダー(下)。`unlock`は他の自動端末を使うレシピ(搬入出パッド・精密ターミナル等)と同じく`wh:auto_terminal`。
 - **レッドストーンロック**: `minecraft:redstone_consumer`を持たせただけで、`targetReconciliation.ts`側の共通の`isRedstoneLocked`判定(全ターミナル種別で共通)がそのまま効く(専用コードの追加は不要)。
+
+## 31. ネットワーク編集中のハイライトをパーティクルからワイヤーフレームエンティティへ変更(ユーザー要望)
+
+ネットワーク編集中(レンチの構築/格納禁止モード)、接続済みメンバーを示す表示は、これまで各メンバーの少し上にパーティクル(`minecraft:villager_happy`/`_angry`)を10tickごとに撃つだけの方式だった(`wrench.ts`)。「上に別のブロックがあると完全に隠れてしまい判別できない」という指摘を受け、置き換えを検討した。
+
+### 検討過程
+
+- **案1: 半透明の膜でブロックを覆う**(ユーザーの初期アイデア): rangeIndicator.ts(21章)と同じ、非表示エンティティ+専用ジオメトリ+`entity_alphablend`の技術を使えば実装は難しくないと判断したが、「1メンバーにつき6面分のエンティティ」という素朴な実装ではエンティティ数がメンバー数(倉庫の特性上、数百規模を想定)に比例して膨れ上がる懸念をユーザーから指摘された。
+- **他アドオンの実装調査(ユーザー要望で2回実施)**:
+  - 1回目(ネットワーク系アドオンに限定): `SIsilicon/WorldEdit-BE`(選択範囲のバウンディングボックスの12辺だけをパーティクルで描く、対象が単一の連続領域だから成立する手法)、`Fluffyalien1422/bedrock-energistics-core`/`asn`(ネットワーク系アドオンだが、そもそも世界内でのハイライト表現をしておらずUIで見せる設計)を調査。散らばった多数のブロックを軽量にハイライトする決定版は見つからなかった。
+  - 2回目(「ネットワーク系に限らず、広くブロックを強調するアドオン」という条件で再調査、ユーザー指摘): `mcbe-mods/EdgeRender`(作者: lete114、MITライセンス)という、ブロックの強調表示だけに特化したライブラリアドオンを発見。「ハイライトしたい1ブロックにつき非表示の専用エンティティを1体スポーンし、立方体の12本の辺だけを表すジオメトリを持たせ、隣接するハイライトブロックとの間の内側の辺をMolang変数で自動的に隠す(smart edge culling)」という手法を採用しており、これを参考にすることにした。
+
+### 採用した設計
+
+- **エンティティ数はメンバー数に比例したまま**: EdgeRenderの手法は「辺の描画本数」を減らす技術であり、エンティティの個体数そのものは減らない(隣接ブロック同士を1つの直方体に併合してエンティティ数自体を減らす案も検討したが、併合ロジックの複雑さに見合うかは実測してから判断すべきと考え、今回は見送った)。各エンティティ自体は物理演算・当たり判定・AIを持たない極小コスト(`minecraft:collision_box`実質無効化、`minecraft:physics`無効、`minecraft:damage_sensor`で無敵化。rangeIndicator.tsのrange_wall/range_ceilingと同じボイラープレート)なので、rangeIndicator.tsの「ネットワーク1つにつき6エンティティ」より遥かに軽量になるはず、という判断で試作した。実測して重ければ、併合による削減を追加検討する。
+- **Molang変数の書き込み方式はEdgeRenderと変えた**: EdgeRenderは`entity.playAnimation()`の`stopExpression`でMolang変数を書き込む手法を使っている(コメントから、古いエンジンバージョン(1.18.x)との互換性のためと推測)。このアドオンは`minecraft:entity_properties`(`Entity.setProperty`/`Entity.getProperty`、`client_sync: true`で `q.property('id')`からMolangで読める)が使えるエンジンバージョンのみ対象にしているため、アニメーションを経由しない、より簡潔なこちらの方式を採用した(`BP/entities/member_highlight.json`の`description.properties`)。
+- **12本の辺の可視性判定ロジック(`scripts-src/memberHighlight.ts`の`edgeVisible`)はEdgeRenderの`fv()`関数をそのまま移植**した: ある辺を挟む2方向の隣接がそれぞれメンバーかどうかと、その対角のマスがメンバーかどうかの3つの真偽値から、辺を表示すべきかを判定する。
+- **表示色は2色**(`wh:drain`プロパティで切り替え、テクスチャは`array.wh_member_highlight_colors[q.property('wh:drain')]`で選択): 構築モードは全メンバー(コントローラ・ストレージ・ターミナル・オブザーバー)を緑、Drainモードはコントローラ+全ストレージを対象に、格納禁止指定済みのストレージだけ赤(元のパーティクル方式の`villager_happy`/`villager_angry`の使い分けを踏襲)。
+- **同期範囲はプレイヤー単位ではなくネットワーク単位**: 元のパーティクル方式は`world.getPlayers()`をループしプレイヤーごとに撃っていたが、パーティクルと違い今回のエンティティは永続化されるため、複数人が同じネットワークを編集していても二重にスポーンしないよう、rangeIndicator.tsの`syncRangeIndicator`と同じ「ネットワーク単位で都度収束させる」設計(`scripts-src/memberHighlight.ts`の`syncMemberHighlight`)にした。モード(構築/Drain)は「そのネットワークを編集中の誰か1人」のツールモードを採用する(`editingSession.ts`の`currentHighlightMode`。複数人が異なるモードで同時編集している稀なケースでは、先に見つかった1人が優先される)。
+- **即時反映+定期的な自己修復のハイブリッド**: 接続/切断・Drain指定変更・ツールモード切り替えの各操作(`wrench.ts`/`toolModeUi.ts`)の直後にその場で`syncMemberHighlight`を呼んで即座に反映しつつ、rangeIndicator.tsの`syncRangeIndicator`と同じ10tickごとの定期実行(`wrench.ts`の`reconcileAllIndicators`、旧`reconcileAllRangeIndicators`から改名)でも呼び直し、ログアウト等での取りこぼしを自己修復する(rangeIndicator.tsと全く同じ設計思想)。
+- **`editingSession.ts`と`memberHighlight.ts`の依存方向**: 「誰が編集中か」を調べる`findAnyEditor`/`currentHighlightMode`は、`memberHighlight.ts`ではなく`editingSession.ts`側に置いた。`memberHighlight.ts`が`editingSession.ts`(の`getEditingNetworkId`)に依存すると、`editingSession.ts`が`memberHighlight.ts`の`syncMemberHighlight`を呼ぶ(`endEditingSession`内)ため循環importになってしまうため。
+- **(追加対応) 二連チェストの継ぎ目が途切れて見える件**(ユーザー指摘): 二連チェストは中身を共有するもう半分が`network.storages`に現れない(1台だけが登録される、24章より前からの既存の設計)ため、そのままではハイライトの輪郭線がちょうど2つのチェストの継ぎ目を横切ってしまい、片方だけ強調されているように見えてしまっていた。`memberHighlight.ts`の`withPhysicalPair`が、`network.ts`の`findPhysicalStoragePair`(ネットワーク登録の有無に関係なく純粋に物理的な隣接を見る、wrench.tsのDrain機能等でも使われている既存関数)で見つかる方も同じdrain値でハイライト対象に加えるようにし、隣接判定(`edgeVisible`)が2マス分をひとつながりとみなして継ぎ目の辺を自動的に隠すようにした。
+- **(追加対応) 二連チェストはどちらの半分を右クリックしても切断できるように**(ユーザー指摘): 上記の対応で両方の半分が強調表示されるようになった結果、「見た目上は両方接続されているように見えるのに、実際にネットワークへ登録されているのは片方だけなので、登録されていない方を右クリックしても『既にネットワークに含まれています』と言われるだけで切断できない」という分かりにくさが表面化した。Drainモード(`handleDrainModeUse`)は元々`resolveStorageMembership`でどちらの半分をクリックしても登録済みの方へ解決する作りだったが、構築モードの接続/切断(`handleBuildModeUse`)は`block.location`をそのまま使っていたためこの解決をしていなかった。`findAdjacentConnectedStorage`で「クリックしたのは未登録の半分だが、隣が登録済み」と分かった場合は、新規接続の試みとしてではなく、その登録済みの半分を切断する操作として扱うようにした(範囲チェックより前で判定し、切断は範囲外でも常に許可するという既存方針を維持)。設定エンティティの後始末(`removeStorageSettingsEntity`)は両方の座標に対して行う(通常の切断パスと同じ)。

@@ -440,6 +440,17 @@ function rangeIndicatorColorAt() {
   return [80, 160, 255, 90];
 }
 
+// メンバーハイライト(member_highlight、ユーザー要望): 接続済みブロックを縁取るワイヤーフレームの
+// 色。通常(緑)/格納禁止指定(赤)の2色を、rangeIndicatorと同じ単色べた塗りで用意する
+// (ジオメトリ側が細い辺のパーツだけなので模様は不要)。
+function memberHighlightColorAt() {
+  return [90, 220, 130, 255];
+}
+
+function memberHighlightDrainColorAt() {
+  return [230, 80, 80, 255];
+}
+
 function packIconColorAt(u, v) {
   const dx = Math.abs(u - 0.5);
   const dy = Math.abs(v - 0.5);
@@ -512,5 +523,7 @@ rangeKitColorAtByTier.forEach((colorAt, i) => {
   writePng(`RP/textures/items/range_kit_tier${i + 1}.png`, 16, colorAt);
 });
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
+writePng("RP/textures/entity/member_highlight.png", 4, memberHighlightColorAt);
+writePng("RP/textures/entity/member_highlight_drain.png", 4, memberHighlightDrainColorAt);
 writePng("RP/pack_icon.png", 128, packIconColorAt);
 writePng("BP/pack_icon.png", 128, packIconColorAt);

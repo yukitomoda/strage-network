@@ -1,4 +1,4 @@
-import { Block, Dimension, ItemCustomComponent, Player, system, Vector3, world } from "@minecraft/server";
+import { Block, Dimension, ItemCustomComponent, Player, system, world } from "@minecraft/server";
 import {
   findAdjacentConnectedStorage,
   findMembership,
@@ -19,8 +19,15 @@ import { getDrain, removeSettingsEntity as removeStorageSettingsEntity, setDrain
 import { isTerminalLikeBlock } from "./terminalBlock";
 import { getToolMode } from "./toolMode";
 import { showToolModeUi } from "./toolModeUi";
-import { endEditingSession, getEditingNetworkId, isAnyoneEditingNetwork, setEditingNetworkId } from "./editingSession";
+import {
+  currentHighlightMode,
+  endEditingSession,
+  getEditingNetworkId,
+  isAnyoneEditingNetwork,
+  setEditingNetworkId,
+} from "./editingSession";
 import { syncRangeIndicator } from "./rangeIndicator";
+import { syncMemberHighlight } from "./memberHighlight";
 import { CONTROLLER_RANGE_AXIS, getRangeForTier } from "./controllerAxes";
 import { getAxisTier } from "./upgrade";
 
@@ -100,6 +107,7 @@ function handleControllerUse(player: Player, dimension: Dimension, block: Block)
   setEditingNetworkId(player, network.id);
   // 自分が今まさに編集を開始したので、isAnyoneEditingNetworkを問い合わせるまでもなく必ず表示する。
   syncRangeIndicator(dimension, network, true);
+  syncMemberHighlight(dimension, network, getToolMode(player) === "drain" ? "drain" : "build");
   const modeHint =
     getToolMode(player) === "drain"
       ? "ストレージをShiftキーを押しながら右クリックして格納禁止指定を切り替えてください。"
@@ -110,6 +118,15 @@ function handleControllerUse(player: Player, dimension: Dimension, block: Block)
 // 範囲軸(controllerAxes.ts)の現在Tierから、このネットワークの接続可能範囲を引く。
 function getEffectiveRange(dimension: Dimension, network: NetworkData): number {
   return getRangeForTier(getAxisTier(dimension, network.controller, CONTROLLER_RANGE_AXIS));
+}
+
+// 接続/切断・Drain指定の変更でメンバー構成が変わるたびに呼ぶ。トグル関数がworldの動的
+// プロパティへ書き戻した直後の最新状態を反映させるため、渡された network 変数ではなく
+// 都度 getNetwork で読み直す(handleBuildModeUse/handleDrainModeUse呼び出し時点のnetwork変数は
+// トグル前のスナップショットのため)。
+function refreshMemberHighlight(dimension: Dimension, networkId: string, mode: "build" | "drain"): void {
+  const network = getNetwork(networkId);
+  if (network) syncMemberHighlight(dimension, network, mode);
 }
 
 // 従来のネットワーク構築モード(ストレージ/ターミナルを右クリックして接続/切断)。倉庫レンチの
@@ -142,6 +159,7 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     }
 
     const result = toggleTerminal(editingNetworkId, block.location);
+    refreshMemberHighlight(dimension, editingNetworkId, "build");
     player.sendMessage(result === "connected" ? "§bターミナルを接続しました。" : "§eターミナルを切断しました。");
     return;
   }
@@ -170,6 +188,7 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     if (result === "disconnected") {
       resetObserverSignal(dimension, block.location);
     }
+    refreshMemberHighlight(dimension, editingNetworkId, "build");
     player.sendMessage(result === "connected" ? "§bオブザーバーを接続しました。" : "§eオブザーバーを切断しました。");
     return;
   }
@@ -178,18 +197,26 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
     const network = getNetwork(editingNetworkId);
     const alreadyConnected = network?.storages.some((s) => locEquals(s, block.location));
     if (network && !alreadyConnected) {
+      // 二連チェストで、クリックしたのは登録されていない側だが、中身を共有するもう半分は
+      // 既に接続済み: 新規接続の試みとしてではなく、その接続済みの半分を切断する操作として
+      // 扱う(ユーザー指摘: 見た目上は両方とも強調表示されるのに、登録されている方でないと
+      // 切断できず分かりにくい。どちらの半分を右クリックしても切断できるようにしてほしい)。
+      // Drainモード(handleDrainModeUse)のresolveStorageMembershipと同じ考え方。
+      // 切断は範囲外でも常に許可する方針(下の新規接続の範囲チェックより先に判定する)。
+      const paired = findAdjacentConnectedStorage(dimension, network, block.location);
+      if (paired) {
+        toggleStorage(editingNetworkId, paired); // 接続済みと確認済みのため必ず切断側になる
+        removeStorageSettingsEntity(dimension, paired);
+        removeStorageSettingsEntity(dimension, block.location);
+        refreshMemberHighlight(dimension, editingNetworkId, "build");
+        player.sendMessage("§eストレージを切断しました。");
+        return;
+      }
+
       // 新規接続(切断は範囲外でも常に許可する。ターミナル側と同じ理由)。
       if (!isWithinNetworkRange(network, block.location, getEffectiveRange(dimension, network))) {
         player.sendMessage(
           `§cコントローラから各方向に${getEffectiveRange(dimension, network)}マスを超えているため接続できません。`
-        );
-        return;
-      }
-
-      const paired = findAdjacentConnectedStorage(dimension, network, block.location);
-      if (paired) {
-        player.sendMessage(
-          "§c隣接するチェストと中身を共有しているため、既にネットワークに含まれています。"
         );
         return;
       }
@@ -201,6 +228,7 @@ function handleBuildModeUse(player: Player, dimension: Dimension, block: Block, 
       const pair = findPhysicalStoragePair(dimension, block.location);
       if (pair) removeStorageSettingsEntity(dimension, pair);
     }
+    refreshMemberHighlight(dimension, editingNetworkId, "build");
     player.sendMessage(result === "connected" ? "§bストレージを接続しました。" : "§eストレージを切断しました。");
     return;
   }
@@ -232,6 +260,8 @@ function handleDrainModeUse(player: Player, dimension: Dimension, block: Block, 
   const pair = findPhysicalStoragePair(dimension, registeredLocation);
   if (pair) setDrain(dimension, pair, newValue);
 
+  refreshMemberHighlight(dimension, editingNetworkId, "drain");
+
   player.sendMessage(
     newValue
       ? "§eこのストレージを格納禁止に指定しました。"
@@ -239,61 +269,23 @@ function handleDrainModeUse(player: Player, dimension: Dimension, block: Block, 
   );
 }
 
-function spawnHighlightParticle(dimension: Dimension, particleId: string, p: Vector3): void {
-  try {
-    dimension.spawnParticle(particleId, { x: p.x + 0.5, y: p.y + 1.2, z: p.z + 0.5 });
-  } catch {
-    // チャンク未読み込み等は無視
-  }
-}
-
-// 編集中のプレイヤーに、現在のモードに応じた強調表示を行う。
-// 構築モード: 接続済みの全メンバー(緑系パーティクル)。
-// Drainモード: Drain指定済みのストレージのみ(赤系パーティクル、区別のため)。
-// どちらも「編集中のネットワーク」に絞る(モードが違っても同じ土台を使う一貫性のため)。
-function highlightEditingNetwork(player: Player): void {
-  const networkId = getEditingNetworkId(player);
-  if (networkId === undefined) return;
-
-  const network = getAllNetworks().find((n) => n.id === networkId);
-  if (!network) return;
-
-  const dimension = world.getDimension(network.dimensionId);
-
-  if (getToolMode(player) === "drain") {
-    // Drain指定済み(赤系)だけでなく、Drain指定できる対象=接続済みの全ストレージ(緑系)も
-    // 見えるようにする(どれがまだ操作対象になるのか分からない、というフィードバック不足の解消)。
-    // コントローラ自身も、構築モードと同じく常に位置が分かるようにしておく。
-    spawnHighlightParticle(dimension, "minecraft:villager_happy", network.controller);
-    for (const loc of network.storages) {
-      const particleId = getDrain(dimension, loc) ? "minecraft:villager_angry" : "minecraft:villager_happy";
-      spawnHighlightParticle(dimension, particleId, loc);
-    }
-    return;
-  }
-
-  const points = [network.controller, ...network.storages, ...network.terminals, ...network.observers];
-  for (const p of points) spawnHighlightParticle(dimension, "minecraft:villager_happy", p);
-}
-
-// 接続範囲インジケータの表示状態を全ネットワーク分まとめて再計算する(rangeIndicator.tsの
-// syncRangeIndicator参照)。プレイヤーの参加/離脱・編集開始/終了のたびに個別に呼ぶだけでは、
-// ログアウトのタイミング次第で後片付けが漏れることがある(playerLeaveの後片付けを参照)ため、
-// この定期実行を「必ず正しい状態に収束させる」ための保険として毎tickループに乗せている。
-function reconcileAllRangeIndicators(): void {
+// 接続範囲インジケータ(rangeIndicator.ts)・メンバーハイライト(memberHighlight.ts)の表示状態を
+// 全ネットワーク分まとめて再計算する。プレイヤーの参加/離脱・編集開始/終了のたびに個別に
+// 呼ぶだけでは、ログアウトのタイミング次第で後片付けが漏れることがある(playerLeaveの
+// 後片付けを参照)ため、この定期実行を「必ず正しい状態に収束させる」ための保険として
+// 毎tickループに乗せている(通常は接続/切断/Drain指定変更の都度その場で同期されるため、
+// この定期実行が実際に表示を動かすのは主に取りこぼしの自己修復時)。
+function reconcileAllIndicators(): void {
   for (const network of getAllNetworks()) {
     const dimension = world.getDimension(network.dimensionId);
-    syncRangeIndicator(dimension, network, isAnyoneEditingNetwork(network.id));
+    const editing = isAnyoneEditingNetwork(network.id);
+    syncRangeIndicator(dimension, network, editing);
+    syncMemberHighlight(dimension, network, editing ? currentHighlightMode(network) : "off");
   }
 }
 
 export function startWrenchHighlightLoop(): void {
-  system.runInterval(() => {
-    for (const player of world.getPlayers()) {
-      highlightEditingNetwork(player);
-    }
-    reconcileAllRangeIndicators();
-  }, HIGHLIGHT_INTERVAL);
+  system.runInterval(reconcileAllIndicators, HIGHLIGHT_INTERVAL);
 }
 
 // 編集セッション中(wh:editing_networkを持つ)にプレイヤーがログアウトすると、
@@ -304,7 +296,7 @@ export function startWrenchHighlightLoop(): void {
 // このイベント内の処理が完了する前にワールド自体が終了してしまい、後片付けが
 // 反映されないことがあった。そのため、これは「できれば即座に」という best-effort の
 // 位置づけにとどめ、確実な後片付けはstartWrenchHighlightLoopの定期的な
-// reconcileAllRangeIndicators側に委ねている(isAnyoneEditingNetworkはオンライン中の
+// reconcileAllIndicators側に委ねている(isAnyoneEditingNetworkはオンライン中の
 // プレイヤーしか見ないため、ログアウトした時点でそのプレイヤーの分は自動的に
 // 「編集中ではない」扱いになり、壁は正しく消える。唯一、このイベントが正常に処理されずに
 // wh:editing_networkが消し忘れられた場合は、次回ログイン時に編集モードへ復帰したように

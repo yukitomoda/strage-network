@@ -1,0 +1,49 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "wh:member_highlight",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "wh:drain": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_vert_en": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_vert_wn": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_vert_es": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_vert_ws": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_top_n": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_top_s": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_top_w": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_top_e": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_bottom_n": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_bottom_s": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_bottom_w": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_bottom_e": { "type": "bool", "default": false, "client_sync": true }
+      }
+    },
+    "components": {
+      "minecraft:collision_box": {
+        "width": 0.1,
+        "height": 0.1
+      },
+      "minecraft:physics": {
+        "has_gravity": false,
+        "has_collision": false
+      },
+      "minecraft:pushable": {
+        "is_pushable": false,
+        "is_pushable_by_piston": false
+      },
+      "minecraft:health": {
+        "value": 1,
+        "max": 1
+      },
+      "minecraft:damage_sensor": {
+        "triggers": {
+          "deals_damage": "no"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "wh:member_highlight",
+      "materials": { "default": "entity_alphablend" },
+      "textures": {
+        "default": "textures/entity/member_highlight",
+        "drain": "textures/entity/member_highlight_drain"
+      },
+      "geometry": { "default": "geometry.member_highlight" },
+      "render_controllers": ["controller.render.member_highlight"]
+    }
+  }
+}

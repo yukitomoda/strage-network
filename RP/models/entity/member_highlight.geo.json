@@ -1,0 +1,33 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.member_highlight",
+        "texture_width": 4,
+        "texture_height": 4,
+        "visible_bounds_width": 3,
+        "visible_bounds_height": 3,
+        "visible_bounds_offset": [0, 0.5, 0]
+      },
+      "bones": [
+        { "name": "root", "pivot": [0, 8, 0] },
+
+        { "name": "vert_en", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [7.75, -8, -8], "size": [0.25, 16, 0.25], "uv": [0, 0] }] },
+        { "name": "vert_wn", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, -8, -8], "size": [0.25, 16, 0.25], "uv": [0, 0] }] },
+        { "name": "vert_es", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [7.75, -8, 7.75], "size": [0.25, 16, 0.25], "uv": [0, 0] }] },
+        { "name": "vert_ws", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, -8, 7.75], "size": [0.25, 16, 0.25], "uv": [0, 0] }] },
+
+        { "name": "top_n", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, 7.75, -8], "size": [16, 0.25, 0.25], "uv": [0, 0] }] },
+        { "name": "top_s", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, 7.75, 7.75], "size": [16, 0.25, 0.25], "uv": [0, 0] }] },
+        { "name": "top_w", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, 7.75, -8], "size": [0.25, 0.25, 16], "uv": [0, 0] }] },
+        { "name": "top_e", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [7.75, 7.75, -8], "size": [0.25, 0.25, 16], "uv": [0, 0] }] },
+
+        { "name": "bottom_n", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, -8, -8], "size": [16, 0.25, 0.25], "uv": [0, 0] }] },
+        { "name": "bottom_s", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, -8, 7.75], "size": [16, 0.25, 0.25], "uv": [0, 0] }] },
+        { "name": "bottom_w", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [-8, -8, -8], "size": [0.25, 0.25, 16], "uv": [0, 0] }] },
+        { "name": "bottom_e", "parent": "root", "pivot": [0, 8, 0], "cubes": [{ "origin": [7.75, -8, -8], "size": [0.25, 0.25, 16], "uv": [0, 0] }] }
+      ]
+    }
+  ]
+}
