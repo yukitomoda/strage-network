@@ -21,7 +21,9 @@ import { setupQuantitySlider } from "./quantitySlider";
 const ROW_COUNT = 8;
 
 // 引き出し/預け入れのどちらのカートラインも同じ形なので共通の型で扱う。
-type CartLine = {
+// remoteDeliveryTerminalUi.ts(リモート配達ターミナル)からも、引き出しタブの中身をそのまま
+// 再利用するためexportしている(ブロック非依存のシグネチャのため流用できた)。
+export type CartLine = {
   itemTypeId: string;
   itemName?: string;
   requested: number;
@@ -31,7 +33,7 @@ type CartLine = {
 
 // 引き出しタブ/預け入れタブそれぞれの「検索+数量+結果一覧+確定」を組み立てる共通処理。
 // タブの切り替えは全コントロールを visible で出し分けるだけ(DDUIにタブ専用の部品は無いため)。
-function setupTab(
+export function setupTab(
   form: CustomForm,
   tabVisible: ObservableBoolean,
   catalog: CatalogEntry[],

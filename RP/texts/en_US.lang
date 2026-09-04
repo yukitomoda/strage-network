@@ -8,6 +8,7 @@ tile.wh:network_observer.name=Network Observer
 tile.wh:io_pad.name=I/O Pad
 tile.wh:suction_pad.name=Suction Pad
 item.wh:wrench=Warehouse Wrench
+item.wh:remote_delivery_terminal=Remote Delivery Terminal
 item.wh:test_filler=[Test] Random Filler
 item.wh:speed_kit_tier1=T1 Speed Upgrade Kit
 item.wh:speed_kit_tier2=T2 Speed Upgrade Kit
@@ -53,5 +54,8 @@ item.wh:io_pad.desc.usage=§7Connect it to a network and stand on it to use it.
 item.wh:suction_pad.desc.1=§7§oA pad that periodically picks up items dropped near its top and deposits them into the network.
 item.wh:suction_pad.desc.usage=§7Just connect it to a network to use it (no configuration needed).
 item.wh:terminal_family.desc.usage=§7Place it on a storage and connect it to a network to use it.
+
+item.wh:remote_delivery_terminal.desc.1=§7§oA terminal that, once linked to a controller, lets you withdraw items just like a delivery terminal from a distance.
+item.wh:remote_delivery_terminal.desc.usage=§7Use it on a controller to link it, then use it in the air near the controller (up to 32 blocks without upgrades).
 
 item.wh:network_observer.desc.1=§7§oOutputs a redstone signal based on the network's item counts.

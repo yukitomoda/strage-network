@@ -29,8 +29,12 @@ export type Order = {
   id: string; // 短い表示用ID。マルチプレイでの識別用途なので厳密な一意性は不要
   requestId: string; // キャンセル指定用の厳密な一意ID(generateId()。表示には使わない)
   playerName: string; // 完了通知の送り先を後から探すため(Entity.idはセッションをまたいで安定しない)
-  terminal: Vector3;
+  terminal: Vector3; // リモート配達ターミナル由来の場合はコントローラの座標(実ブロックは無い。記録・表示用途のみ)
   lines: OrderLine[];
+  // リモート配達ターミナル(アイテム)由来の注文であることの印。terminalSettings.ts(場所キーの
+  // 非表示エンティティ)を経由できないため、注文時点の設定をここへスナップショットして持たせる
+  // (orderProcessing.tsのfinalizeOrder参照)。
+  remote?: { notifyOnComplete: boolean; terminalName?: string };
 };
 
 export type IssuingEntry = {
@@ -206,6 +210,14 @@ export function generateDeliveryTerminalName(): string {
 
 export function generateIoPadName(): string {
   return `IOP-${generateShortCode()}`;
+}
+
+export function generateRemoteDeliveryTerminalName(): string {
+  return `RDT-${generateShortCode()}`;
+}
+
+export function generateControllerName(): string {
+  return `CTL-${generateShortCode()}`;
 }
 
 export function locEquals(a: Vector3, b: Vector3): boolean {

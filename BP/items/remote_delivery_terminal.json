@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.100",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:remote_delivery_terminal",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_remote_delivery_terminal_icon",
+      "minecraft:display_name": {
+        "value": "item.wh:remote_delivery_terminal"
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:hand_equipped": true,
+      "wh:remote_delivery_terminal": {}
+    }
+  }
+}

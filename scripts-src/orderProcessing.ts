@@ -30,8 +30,15 @@ export function getOrderThroughput(tier: number): number {
 const ISSUE_DELAY_TICKS = 0;
 
 // 戻り値の id はプレイヤーへの表示用(引き出し確定時のメッセージ、完了通知に使う)。
-export function submitOrder(networkId: string, terminalLoc: Vector3, playerName: string, lines: OrderLine[]): string {
-  const order: Order = { id: generateOrderId(), requestId: generateId(), playerName, terminal: terminalLoc, lines };
+// remote: リモート配達ターミナル(アイテム)由来の注文の場合だけ渡す(state.tsのOrder.remote参照)。
+export function submitOrder(
+  networkId: string,
+  terminalLoc: Vector3,
+  playerName: string,
+  lines: OrderLine[],
+  remote?: Order["remote"]
+): string {
+  const order: Order = { id: generateOrderId(), requestId: generateId(), playerName, terminal: terminalLoc, lines, remote };
   const entries = getIssuing(networkId);
   entries.push({ order, readyAtTick: system.currentTick + ISSUE_DELAY_TICKS });
   setIssuing(networkId, entries);
@@ -44,9 +51,9 @@ export function listActiveOrders(networkId: string): Order[] {
   return [...getIssuing(networkId).map((entry) => entry.order), ...getOrders(networkId)];
 }
 
-// 配達ターミナルは1プレイヤーにつき同時に1件までしか配達できない制約(ネットワーク横断)。
-// アクションバーで進捗を表示する都合上、同じプレイヤー宛の配達が複数同時進行すると
-// どちらの進捗を出すべきか一意に決められないための制約(docs/design.md参照)。
+// 配達ターミナル(リモート配達ターミナルも含む)は1プレイヤーにつき同時に1件までしか配達できない
+// 制約(ネットワーク横断)。アクションバーで進捗を表示する都合上、同じプレイヤー宛の配達が
+// 複数同時進行するとどちらの進捗を出すべきか一意に決められないための制約(docs/design.md参照)。
 // 「issuing/ordersに存在する」こと自体が「まだfinalizeOrderされていない=未完了」を意味する
 // (全ラインが配送済みor不足確定になった時点でfinalizeOrderされキューから除去されるため)。
 export function hasActiveDeliveryOrderFor(playerName: string): boolean {
@@ -55,7 +62,7 @@ export function hasActiveDeliveryOrderFor(playerName: string): boolean {
     const activeOrders = [...getIssuing(network.id).map((entry) => entry.order), ...getOrders(network.id)];
     for (const order of activeOrders) {
       if (order.playerName !== playerName) continue;
-      if (dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) return true;
+      if (order.remote || dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) return true;
     }
   }
   return false;
@@ -110,39 +117,52 @@ export function processNetworkOrders(network: NetworkData): boolean {
       continue;
     }
 
-    // network.terminals(登録データ)を正とする。ここに無ければ本当に切断/破壊されたとみなす。
-    // 登録はあるのにブロックが今取得できない場合は、ワールド再読み込み直後などでその
-    // チャンクがまだ読み込まれていないだけの可能性があるため、打ち切らずに次tickへ持ち越す
-    // (実機で、これが原因で処理中の引き出しが誤って消えることを確認済み)。
-    const stillRegistered = network.terminals.some((t) => locEquals(t, order.terminal));
-    if (!stillRegistered) {
-      finalizeOrder(network, dimension, order);
-      orders = orders.slice(1);
-      setOrders(network.id, orders);
-      continue;
-    }
+    let destContainer;
 
-    const terminalBlock = dimension.getBlock(order.terminal);
-    if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
-      // 登録はあるが、今はブロックを取得できない(チャンク未読み込み等)。今回はここで諦めて
-      // 次tickに再試行する(FIFOを守るため、後続の引き出しの処理には進まない)。
-      break;
-    }
-
-    // 搬入先はターミナルが張り付いている面(wh:facing)の先のブロック。毎回動的に見る。
-    // (搬入出パッドは25章の広告モデルへ移行済みで、FIFOキュー(=ここ)に乗ることは無い。
-    // 張り付いた先という概念が無いパッド専用の分岐は不要になったため削除した。)
-    const attachedLoc = getAttachedStorageLocation(terminalBlock);
-    let destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
-
-    // 配達ターミナル: 注文したプレイヤーがオンラインなら、位置に関わらずインベントリへ優先的に
-    // 届ける(右クリックしないと注文できない=注文した時点で必ず正面にいたことが保証されているため、
-    // 配送時点の位置判定は行わない、という設計判断。docs/design.md参照)。オフラインなら従来通り
-    // 張り付いた先のストレージへ(=通常のターミナルと同じ基本動作)。
-    if (terminalBlock.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+    if (order.remote) {
+      // リモート配達ターミナル(アイテム)由来: 実在するブロックを一切参照しない。注文した
+      // プレイヤーがオンラインならインベントリへ優先的に届ける(配達ターミナルと同じ設計判断。
+      // 使用時点でコントローラの近くにいたことは既に確認済みなので、配送時点の位置判定は
+      // 行わない)。オンラインでなければ、張り付いた先のような代替の搬入先が無いため
+      // destContainerはundefinedのままにし、下の「搬入先が無い」フォールバックへ合流させる
+      // (ネットワーク在庫は一切減らないため消失リスクは無い)。
       const orderingPlayer = world.getPlayers().find((p) => p.name === order.playerName);
-      const playerContainer = orderingPlayer?.getComponent("inventory")?.container;
-      if (playerContainer) destContainer = playerContainer;
+      destContainer = orderingPlayer?.getComponent("inventory")?.container;
+    } else {
+      // network.terminals(登録データ)を正とする。ここに無ければ本当に切断/破壊されたとみなす。
+      // 登録はあるのにブロックが今取得できない場合は、ワールド再読み込み直後などでその
+      // チャンクがまだ読み込まれていないだけの可能性があるため、打ち切らずに次tickへ持ち越す
+      // (実機で、これが原因で処理中の引き出しが誤って消えることを確認済み)。
+      const stillRegistered = network.terminals.some((t) => locEquals(t, order.terminal));
+      if (!stillRegistered) {
+        finalizeOrder(network, dimension, order);
+        orders = orders.slice(1);
+        setOrders(network.id, orders);
+        continue;
+      }
+
+      const terminalBlock = dimension.getBlock(order.terminal);
+      if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
+        // 登録はあるが、今はブロックを取得できない(チャンク未読み込み等)。今回はここで諦めて
+        // 次tickに再試行する(FIFOを守るため、後続の引き出しの処理には進まない)。
+        break;
+      }
+
+      // 搬入先はターミナルが張り付いている面(wh:facing)の先のブロック。毎回動的に見る。
+      // (搬入出パッドは25章の広告モデルへ移行済みで、FIFOキュー(=ここ)に乗ることは無い。
+      // 張り付いた先という概念が無いパッド専用の分岐は不要になったため削除した。)
+      const attachedLoc = getAttachedStorageLocation(terminalBlock);
+      destContainer = dimension.getBlock(attachedLoc)?.getComponent("inventory")?.container;
+
+      // 配達ターミナル: 注文したプレイヤーがオンラインなら、位置に関わらずインベントリへ優先的に
+      // 届ける(右クリックしないと注文できない=注文した時点で必ず正面にいたことが保証されているため、
+      // 配送時点の位置判定は行わない、という設計判断。docs/design.md参照)。オフラインなら従来通り
+      // 張り付いた先のストレージへ(=通常のターミナルと同じ基本動作)。
+      if (terminalBlock.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+        const orderingPlayer = world.getPlayers().find((p) => p.name === order.playerName);
+        const playerContainer = orderingPlayer?.getComponent("inventory")?.container;
+        if (playerContainer) destContainer = playerContainer;
+      }
     }
 
     if (!destContainer) {
@@ -207,14 +227,17 @@ function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order)
     appendPartial(network.id, { orderId: order.id, terminal: order.terminal, shortfall });
   }
 
-  // ターミナルごとの設定(通知の有無)は非表示エンティティ側に持たせている(terminalSettings.ts)。
-  // ターミナルが切断/破壊済みでエンティティが無い場合はデフォルト(true)扱いになる。
-  if (!getNotifyOnComplete(dimension, order.terminal)) return;
+  // ターミナルごとの設定(通知の有無)は通常は非表示エンティティ側に持たせている
+  // (terminalSettings.ts)。ターミナルが切断/破壊済みでエンティティが無い場合はデフォルト(true)
+  // 扱いになる。リモート配達ターミナルは対応する場所が無いため、注文時点でスナップショットした
+  // order.remoteから読む。
+  const notifyOnComplete = order.remote ? order.remote.notifyOnComplete : getNotifyOnComplete(dimension, order.terminal);
+  if (!notifyOnComplete) return;
 
   const player = world.getPlayers().find((p) => p.name === order.playerName);
   if (!player) return; // オフライン等。ログイン中の通知のみサポート(MVP)
 
-  const terminalName = getTerminalName(dimension, order.terminal);
+  const terminalName = order.remote ? order.remote.terminalName : getTerminalName(dimension, order.terminal);
   const namePrefix = terminalName ? `「${terminalName}」の` : "";
 
   player.sendMessage(
@@ -223,11 +246,11 @@ function finalizeOrder(network: NetworkData, dimension: Dimension, order: Order)
       : `§b${namePrefix}引き出し #${order.id} の受け取り準備ができました。`
   );
 
-  // 配達ターミナルはチャットのメッセージが見落とされやすいという指摘を受け、アクションバーにも
-  // 完了を表示する(進捗表示と同じ通知トグルに乗せ、専用の設定は増やさない)。
-  // (搬入出パッドは25章の広告モデルへ移行済みでfinalizeOrderを経由しないため、対応する
-  // アクションバー通知はioPadProgress.ts側のライブ比較表示に統合した。)
-  if (dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
+  // 配達ターミナル(リモート配達ターミナルも含む)はチャットのメッセージが見落とされやすいという
+  // 指摘を受け、アクションバーにも完了を表示する(進捗表示と同じ通知トグルに乗せ、専用の設定は
+  // 増やさない)。(搬入出パッドは25章の広告モデルへ移行済みでfinalizeOrderを経由しないため、
+  // 対応するアクションバー通知はioPadProgress.ts側のライブ比較表示に統合した。)
+  if (order.remote || dimension.getBlock(order.terminal)?.typeId === DELIVERY_TERMINAL_BLOCK_ID) {
     player.onScreenDisplay.setActionBar(
       shortfall.length > 0 ? "§e配達完了(一部不足があります)" : "§a配達完了!"
     );

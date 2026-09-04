@@ -1,0 +1,16 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:remote_delivery_terminal"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:ender_pearl" },
+      "B": { "item": "wh:delivery_terminal" }
+    },
+    "pattern": [" A ", "ABA", " A "],
+    "result": { "item": "wh:remote_delivery_terminal" },
+    "unlock": [{ "item": "wh:delivery_terminal" }]
+  }
+}

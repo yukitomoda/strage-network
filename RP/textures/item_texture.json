@@ -58,6 +58,9 @@
     },
     "wh_range_kit_tier4": {
       "textures": "textures/items/range_kit_tier4"
+    },
+    "wh_remote_delivery_terminal_icon": {
+      "textures": "textures/items/remote_delivery_terminal_icon"
     }
   }
 }

@@ -1,5 +1,5 @@
 import { Dimension, Entity, Vector3 } from "@minecraft/server";
-import { locEquals } from "./state";
+import { generateControllerName, locEquals } from "./state";
 
 // コントローラごとのローカル設定を保持する非表示エンティティ。terminalSettings.ts/
 // storageSettings.ts と全く同じ発想(ブロックには動的プロパティを持たせられないため)。
@@ -8,6 +8,7 @@ import { locEquals } from "./state";
 const SETTINGS_ENTITY_TYPE = "wh:controller_settings";
 const NOTIFY_ON_ORGANIZE_COMPLETE_PROPERTY = "wh:notify_on_organize_complete";
 const ENABLED_PROPERTY = "wh:enabled";
+const NAME_PROPERTY = "wh:name";
 const OWNER_LOCATION_PROPERTY = "wh:owner_loc";
 
 function centerOf(loc: Vector3): Vector3 {
@@ -75,4 +76,21 @@ export function getControllerEnabled(dimension: Dimension, controllerLoc: Vector
 
 export function setControllerEnabled(dimension: Dimension, controllerLoc: Vector3, value: boolean): void {
   ensureSettingsEntity(dimension, controllerLoc).setDynamicProperty(ENABLED_PROPERTY, value);
+}
+
+// コントローラの名前(ユーザー要望: ターミナルと同様に名付けられるようにしてほしい)。
+// ターミナルの名前(terminalSettings.ts)と違い、リモート配達ターミナルの「状況」タブでの
+// 表示など「常に何か読める名前がある」ことが前提の使い方があるため、未設定(この機能を
+// 追加する前に設置された既存ワールドのコントローラ等)ならこの場でランダムに生成して
+// 永続化する(getTerminalNameのように無名(undefined)のままにはしない)。
+export function getControllerName(dimension: Dimension, controllerLoc: Vector3): string {
+  const existing = findSettingsEntity(dimension, controllerLoc)?.getDynamicProperty(NAME_PROPERTY);
+  if (typeof existing === "string" && existing.length > 0) return existing;
+  const generated = generateControllerName();
+  setControllerName(dimension, controllerLoc, generated);
+  return generated;
+}
+
+export function setControllerName(dimension: Dimension, controllerLoc: Vector3, name: string | undefined): void {
+  ensureSettingsEntity(dimension, controllerLoc).setDynamicProperty(NAME_PROPERTY, name && name.length > 0 ? name : undefined);
 }

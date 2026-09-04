@@ -10,6 +10,7 @@ import { deliveryTerminalBlockComponent } from "./deliveryTerminalBlock";
 import { startDeliveryProgressLoop } from "./deliveryProgress";
 import { ioPadBlockComponent } from "./ioPadBlock";
 import { startPadProgressLoop } from "./ioPadProgress";
+import { remoteDeliveryTerminalItemComponent } from "./remoteDeliveryTerminalItem";
 import { registerStorageBreakWatcher } from "./storageLifecycle";
 import { suctionPadBlockComponent } from "./suctionPadBlock";
 import { testFillerItemComponent } from "./testFiller";
@@ -30,6 +31,7 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRe
   itemComponentRegistry.registerCustomComponent("wh:wrench", wrenchItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:test_filler", testFillerItemComponent);
   itemComponentRegistry.registerCustomComponent("wh:upgrade_kit", upgradeKitItemComponent);
+  itemComponentRegistry.registerCustomComponent("wh:remote_delivery_terminal", remoteDeliveryTerminalItemComponent);
 });
 
 registerStorageBreakWatcher();

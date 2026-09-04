@@ -344,6 +344,39 @@ const inventoryTerminalIconColorAt = flatTerminalIconColorAt([200, 165, 245], [8
 const precisionTerminalIconColorAt = flatTerminalIconColorAt([250, 140, 140], [110, 30, 30]);
 const deliveryTerminalIconColorAt = flatTerminalIconColorAt([140, 230, 150], [30, 110, 45]);
 
+// リモート配達ターミナル(アイテム): 他のターミナル系(壁面パネル調、画面いっぱいに不透明な
+// 枠)とは違い、「手持ちのタブレット端末」を連想させる見た目にする(ユーザー要望:
+// 「もっとポータブル感のある見た目」)。倉庫レンチ(wrenchColorAt)と同じく背景を透過にする。
+// 過去2回の試行(縦長すぎる本体+同心の弧3本の無線マーク→潰れて水色の塊に見える、
+// アンテナに変更→本体の枠に食い込んで上端が開いた「コップ」のように見える)がいずれも
+// 16x16の低解像度で意図通りに見えなかった(ユーザー指摘)ため、装飾は諦めてタブレットらしい
+// 比率(幅:高さ ≒ 3:4)の閉じた枠+画面+下部ボタンという、確実に読み取れる単純な形にした。
+function remoteDeliveryTerminalIconColorAt(u, v) {
+  const inBody = u >= 0.26 && u <= 0.74 && v >= 0.16 && v <= 0.84;
+  if (!inBody) return [0, 0, 0, 0];
+
+  const bodyBevel = edgeBevel((u - 0.26) / 0.48, (v - 0.16) / 0.68, 0.08);
+  let [r, g, b] = [45, 48, 58];
+  if (bodyBevel === 1) [r, g, b] = [r + 20, g + 20, b + 20];
+  else if (bodyBevel === -1) [r, g, b] = [r - 15, g - 15, b - 15];
+
+  // 画面(本体の中央寄り、下部にホームボタン分の余白を残す)
+  const inScreen = u >= 0.31 && u <= 0.69 && v >= 0.22 && v <= 0.7;
+  if (inScreen) {
+    const t = 1 - (v - 0.22) / 0.48;
+    r = 30 + 110 * t;
+    g = 70 + 130 * t;
+    b = 130 + 125 * t;
+    if (Math.floor(v * 16) % 2 === 0) [r, g, b] = [r - 10, g - 10, b - 10]; // 走査線(CRT風)
+  }
+
+  // 下部のホームボタン
+  if (Math.hypot(u - 0.5, v - 0.78) < 0.035) [r, g, b] = [210, 215, 225];
+
+  const n = (hashNoise(u, v) - 0.5) * 6;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
 // アップグレードキットアイテム: 透過背景に単純な菱形(宝石風)アイコン。Tierごとの色味だけで
 // 見分ける(素材(銅/鉄/ダイヤ/ネザライト)には対応させず、Tier番号のみの汎用ネーミングにした。
 // 色自体は元々の素材イメージを踏襲しつつ、あくまでTierの進行を表す配色として流用している)。
@@ -511,6 +544,7 @@ writePng("RP/textures/blocks/auto_terminal_icon.png", 16, autoTerminalIconColorA
 writePng("RP/textures/blocks/inventory_terminal_icon.png", 16, inventoryTerminalIconColorAt);
 writePng("RP/textures/blocks/precision_terminal_icon.png", 16, precisionTerminalIconColorAt);
 writePng("RP/textures/blocks/delivery_terminal_icon.png", 16, deliveryTerminalIconColorAt);
+writePng("RP/textures/items/remote_delivery_terminal_icon.png", 16, remoteDeliveryTerminalIconColorAt);
 writePng("RP/textures/blocks/network_observer_icon.png", 16, networkObserverIconColorAt);
 writePng("RP/textures/items/wrench.png", 16, wrenchColorAt);
 speedKitColorAtByTier.forEach((colorAt, i) => {

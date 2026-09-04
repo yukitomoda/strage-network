@@ -80,6 +80,15 @@ const SUCTION_PAD_LORE: RawMessage[] = [
   ADDON_SIGNATURE_LINE,
 ];
 
+// リモート配達ターミナルはブロックに設置しないアイテムなので、専用の使い方説明を持つ。
+const REMOTE_DELIVERY_TERMINAL_LORE: RawMessage[] = [
+  { translate: "item.wh:remote_delivery_terminal.desc.1" },
+  BLANK_LINE,
+  { translate: "item.wh:remote_delivery_terminal.desc.usage" },
+  BLANK_LINE,
+  ADDON_SIGNATURE_LINE,
+];
+
 // 速度強化キット: T1〜T4で文章自体は共通(item.wh:speed_kit.desc.*)で、スループット・Tier
 // 番号・最大Tierだけがそのキットのtierに応じて変わる。数値を説明文にベタ書きしないのは、
 // 後でスループットのテーブル(orderProcessing.ts等)を調整した時に自動で反映されるようにする
@@ -139,6 +148,7 @@ function buildRangeKitLore(tier: number): RawMessage[] {
 // 1要素=1行。
 const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
   "wh:wrench": WRENCH_LORE,
+  "wh:remote_delivery_terminal": REMOTE_DELIVERY_TERMINAL_LORE,
   "wh:controller": CONTROLLER_LORE,
   "wh:terminal": TERMINAL_LORE,
   "wh:auto_terminal": AUTO_TERMINAL_LORE,

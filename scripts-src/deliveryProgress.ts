@@ -22,7 +22,9 @@ export function startDeliveryProgressLoop(): void {
       const activeOrders = [...getIssuing(network.id).map((entry) => entry.order), ...getOrders(network.id)];
 
       for (const order of activeOrders) {
-        if (dimension.getBlock(order.terminal)?.typeId !== DELIVERY_TERMINAL_BLOCK_ID) continue;
+        // リモート配達ターミナル(アイテム)由来の注文は実在するブロックを持たないため、
+        // order.remoteで判定する。
+        if (!order.remote && dimension.getBlock(order.terminal)?.typeId !== DELIVERY_TERMINAL_BLOCK_ID) continue;
 
         const player = world.getPlayers().find((p) => p.name === order.playerName);
         if (!player) continue; // オフライン等。オンライン中のみ表示(MVP)。

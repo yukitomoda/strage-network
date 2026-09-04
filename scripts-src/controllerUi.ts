@@ -3,8 +3,10 @@ import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } fro
 import { CONTROLLER_AXES, CONTROLLER_CYCLE_AXIS, CONTROLLER_RANGE_AXIS, CONTROLLER_SPEED_AXIS, getRangeForTier } from "./controllerAxes";
 import {
   getControllerEnabled,
+  getControllerName,
   getNotifyOnOrganizeComplete,
   setControllerEnabled,
+  setControllerName,
   setNotifyOnOrganizeComplete,
 } from "./controllerSettings";
 import { getDepositThroughput, listActiveDeposits } from "./depositProcessing";
@@ -41,6 +43,7 @@ export function showControllerUi(player: Player, block: Block): void {
     player.sendMessage("§cこのコントローラのネットワーク情報が見つかりません。");
     return;
   }
+  const controllerName = getControllerName(dimension, block.location);
 
   // ドロップダウンの表示順・開いた直後のデフォルトタブのどちらも「状況」(value=0)。
   const isOrganizeTab = new ObservableBoolean(false);
@@ -56,7 +59,7 @@ export function showControllerUi(player: Player, block: Block): void {
     isSettingsTab.setData(index === 3);
   });
 
-  const form = new CustomForm(player, "倉庫");
+  const form = new CustomForm(player, `倉庫: ${controllerName}`);
   form.dropdown("", tabSelection, [
     { label: "状況", value: 0 },
     { label: "整理", value: 1 },
@@ -183,6 +186,11 @@ export function showControllerUi(player: Player, block: Block): void {
     form.divider({ visible: isUpgradeTab });
   }
 
+  const name = new ObservableString(controllerName, { clientWritable: true });
+  name.subscribe((value) => {
+    setControllerName(dimension, block.location, value);
+  });
+
   const enabled = new ObservableBoolean(getControllerEnabled(dimension, block.location), {
     clientWritable: true,
   });
@@ -199,6 +207,10 @@ export function showControllerUi(player: Player, block: Block): void {
 
   form.label("このコントローラの設定です。", { visible: isSettingsTab });
   form.divider({ visible: isSettingsTab });
+  form.textField("名前", name, {
+    description: "リモート配達ターミナルの状況タブ等で表示されます。",
+    visible: isSettingsTab,
+  });
   form.toggle("起動", enabled, {
     description: "コントローラの起動・停止を切り替えます。",
     visible: isSettingsTab,
