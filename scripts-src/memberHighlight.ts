@@ -3,6 +3,7 @@ import { getRangeForTier } from "./controllerAxes";
 import { findPhysicalStoragePair } from "./network";
 import { NetworkData } from "./state";
 import { getDrain } from "./storageSettings";
+import { getBlockFacing, isThinTerminalBlock } from "./terminalBlock";
 
 // ネットワーク編集中の「どのブロックが接続されているか」を可視化するハイライト
 // (ユーザー要望: 上に別のブロックがあると隠れて判別できないパーティクル方式からの置き換え)。
@@ -93,6 +94,25 @@ function computeEdgeProperties(loc: Vector3, isMember: (l: Vector3) => boolean):
   };
 }
 
+type ThinFacing = "north" | "south" | "east" | "west" | "up" | "down";
+
+// 実機確認で、張り付き面(terminalBlock.tsのgetBlockFacing)の値をそのまま使うと強調表示の
+// 向きが逆になることが分かった(ユーザー指摘)。エンティティ側のジオメトリ(RP/models/entity/
+// member_highlight.geo.jsonのthin_*ボーン)とブロックのローカル座標系との向きの食い違いによる
+// ものと思われるが、理論的な整合性よりも実機での見た目を優先し、反対向きに変換してから使う。
+const OPPOSITE_FACING: Record<string, ThinFacing> = {
+  north: "south",
+  south: "north",
+  east: "west",
+  west: "east",
+  up: "down",
+  down: "up",
+};
+
+function highlightFacing(facing: string | undefined): ThinFacing {
+  return OPPOSITE_FACING[facing ?? "north"] ?? "south";
+}
+
 type HighlightPoint = { loc: Vector3; drain: boolean };
 
 // 二連チェストは中身を共有するもう半分(登録されていない側)がnetwork.storagesに現れないため、
@@ -160,9 +180,16 @@ export function syncMemberHighlight(dimension: Dimension, network: NetworkData, 
       entity.setDynamicProperty(OWNER_LOCATION_PROPERTY, JSON.stringify(point.loc));
     }
     entity.setProperty("wh:drain", point.drain);
-    const edgeProps = computeEdgeProperties(point.loc, isMember);
-    for (const [propertyId, visible] of Object.entries(edgeProps)) {
-      entity.setProperty(propertyId, visible);
+    const block = dimension.getBlock(point.loc);
+    const isThin = !!block && isThinTerminalBlock(block.typeId);
+    entity.setProperty("wh:is_thin", isThin);
+    if (isThin) {
+      entity.setProperty("wh:facing", highlightFacing(getBlockFacing(block!)));
+    } else {
+      const edgeProps = computeEdgeProperties(point.loc, isMember);
+      for (const [propertyId, visible] of Object.entries(edgeProps)) {
+        entity.setProperty(propertyId, visible);
+      }
     }
   }
 }

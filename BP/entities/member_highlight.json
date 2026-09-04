@@ -19,7 +19,14 @@
         "wh:visible_bottom_n": { "type": "bool", "default": false, "client_sync": true },
         "wh:visible_bottom_s": { "type": "bool", "default": false, "client_sync": true },
         "wh:visible_bottom_w": { "type": "bool", "default": false, "client_sync": true },
-        "wh:visible_bottom_e": { "type": "bool", "default": false, "client_sync": true }
+        "wh:visible_bottom_e": { "type": "bool", "default": false, "client_sync": true },
+        "wh:is_thin": { "type": "bool", "default": false, "client_sync": true },
+        "wh:facing": {
+          "type": "enum",
+          "values": ["north", "south", "east", "west", "up", "down"],
+          "default": "north",
+          "client_sync": true
+        }
       }
     },
     "components": {
