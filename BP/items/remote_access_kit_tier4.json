@@ -1,0 +1,18 @@
+{
+  "format_version": "1.21.100",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wh:remote_access_kit_tier4",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": "wh_remote_access_kit_tier4",
+      "minecraft:display_name": {
+        "value": "item.wh:remote_access_kit_tier4"
+      },
+      "wh:upgrade_kit": {}
+    }
+  }
+}

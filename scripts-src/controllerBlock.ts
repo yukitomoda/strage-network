@@ -5,6 +5,7 @@ import { showControllerUi } from "./controllerUi";
 import { endEditingSession, getEditingNetworkId } from "./editingSession";
 import { createNetwork, destroyNetwork, findNetworkByController } from "./network";
 import { resetObserverSignal } from "./networkObserverProcessing";
+import { removeTickingAreaForNetwork } from "./remoteAccessChunkLoading";
 import { getAxisTierFromPermutation, giveOrDropKits } from "./upgrade";
 
 export const CONTROLLER_COMPONENT_ID = "wh:controller";
@@ -43,6 +44,7 @@ export const controllerBlockComponent: BlockCustomComponent = {
       resetObserverSignal(dimension, loc);
     }
 
+    removeTickingAreaForNetwork(network.id);
     destroyNetwork(network.id);
     removeSettingsEntity(dimension, block.location);
     player?.sendMessage("§e倉庫ネットワークを解体しました。");

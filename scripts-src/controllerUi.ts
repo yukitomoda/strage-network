@@ -1,6 +1,14 @@
 import { Block, Player, system } from "@minecraft/server";
 import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } from "@minecraft/server-ui";
-import { CONTROLLER_AXES, CONTROLLER_CYCLE_AXIS, CONTROLLER_RANGE_AXIS, CONTROLLER_SPEED_AXIS, getRangeForTier } from "./controllerAxes";
+import {
+  CONTROLLER_AXES,
+  CONTROLLER_CYCLE_AXIS,
+  CONTROLLER_RANGE_AXIS,
+  CONTROLLER_REMOTE_ACCESS_AXIS,
+  CONTROLLER_SPEED_AXIS,
+  formatRemoteAccessDistance,
+  getRangeForTier,
+} from "./controllerAxes";
 import {
   getControllerEnabled,
   getControllerName,
@@ -165,6 +173,12 @@ export function showControllerUi(player: Player, block: Block): void {
       form.label(rangeLabel, { visible: isUpgradeTab });
       updateDetailLabels = (tier) => {
         rangeLabel.setData(`範囲： §7±${getRangeForTier(tier)}マス`);
+      };
+    } else if (axis === CONTROLLER_REMOTE_ACCESS_AXIS) {
+      const remoteAccessLabel = new ObservableString(`操作可能距離： §7${formatRemoteAccessDistance(initialTier)}`);
+      form.label(remoteAccessLabel, { visible: isUpgradeTab });
+      updateDetailLabels = (tier) => {
+        remoteAccessLabel.setData(`操作可能距離： §7${formatRemoteAccessDistance(tier)}`);
       };
     }
 

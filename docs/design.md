@@ -1093,3 +1093,50 @@ vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、e
 - **状況タブにリンク先IDを表示→コントローラの命名機能へ発展**(ユーザー要望): 当初は「接続されている倉庫コントローラのIDを見られるようにしてほしい」との要望を受け、状況タブの先頭に生の`network.id`(`generateId()`が生成するランダムな英数字文字列)を表示していたが、実機で見ると日本語の説明文と英数字が混ざって文字化けのように見えて読みにくく、プレイヤーに優しくないと指摘された。そこで、**コントローラにもターミナルと同じように名前を付けられるようにし**(`controllerSettings.ts`の`getControllerName`/`setControllerName`、`controllerUi.ts`の「設定」タブに「名前」欄を追加)、リモート配達ターミナルの状況タブにはIDではなくその名前を表示するように変更した。
   - **常に読める名前がある、という前提を保証する**: ターミナルの`getTerminalName`は未設定なら`undefined`を返す(呼び出し元が「名前未設定」を許容する前提)のに対し、コントローラの`getControllerName`は**未設定ならその場でランダムな名前(`generateControllerName`、他の`generateXName`と同じ命名規則)を生成し、永続化してから返す**(戻り値は`string`で`undefined`にならない)。これは、この機能を追加する前に設置された既存ワールドのコントローラにも後から自動的に名前が付くようにするため、かつリモート配達ターミナルの状況タブのような「常に何か読める名前が要る」用途を安全に満たすため。名前欄を空欄に変更した場合も、次に`getControllerName`が呼ばれた時点で新しくランダムな名前が生成される(空のままにはならない)。
   - コントローラUI自体のタイトルバー(`倉庫: ${controllerName}`)・リンク時のメッセージ(`「${controllerName}」にリンクしました`)にも同じ名前を使うようにし、表示の一貫性を持たせた。
+
+## 33. コントローラに「リモート操作」アップグレード軸を追加(+長距離使用時のチャンク常時読み込み)(ユーザー要望)
+
+32章のリモート配達ターミナルは32ブロック固定でしか使えないMVPだった。今回、「速度」「周期」「範囲」と並ぶ4本目のアップグレード軸`wh:remote_access_tier`(Cタイプ、T1〜T4)を追加し、Tierに応じて利用可能距離を広げられるようにした(T1: 64 / T2: 256 / T3: 同一ディメンション内どこでも / T4: 異なるディメンションを含めどこでも)。あわせて、ユーザーから「長距離で使う場合、倉庫のあるチャンクが読み込まれていない可能性がある」との指摘を受け、T1以上を装着している間はコントローラ周辺のチャンクを常時読み込み状態にする機能も追加した。
+
+### 軸の追加自体は既存の仕組みをそのまま再利用
+
+`UpgradeAxis`(`upgrade.ts`)・`upgradeKitItemComponent`(`upgradeKit.ts`)は軸に依存しない汎用実装のため、新しい`CONTROLLER_REMOTE_ACCESS_AXIS`を`controllerAxes.ts`に追加し`CONTROLLER_AXES`配列に含めるだけで、両ファイルとも無改修で新軸に対応できた(21章の設計通り)。`BP/blocks/controller.json`の`states`に他の3軸と同じ書式で`"wh:remote_access_tier": [0, 1, 2, 3, 4]`を追加した。
+
+各Tierは「距離」(`distance`)と「別ディメンションからの使用可否」(`crossDimension`)という2つの独立したパラメータを持つ(`REMOTE_ACCESS_TABLE: RemoteAccessTierConfig[]`、index=tier、0=未装着時の現状維持)。当初は距離だけの単純なテーブル(T1: 64 / T2: 256 / T3: 1024 / T4: 同一ディメンション内どこでも)だったが、ユーザーから「T3は同一ディメンション内どこでも、T4は異なるディメンションを含めどこでも」という仕様変更の要望を受け、2パラメータ化した:
+
+```
+{ distance: 32,       crossDimension: false }, // tier0
+{ distance: 64,       crossDimension: false }, // tier1
+{ distance: 256,      crossDimension: false }, // tier2
+{ distance: Infinity, crossDimension: false }, // tier3: 同一ディメンション内どこでも
+{ distance: Infinity, crossDimension: true },  // tier4: 異なるディメンションを含めどこでも
+```
+
+`distance`が`Infinity`のTier(T3・T4)は、`network.ts`の既存`isWithinNetworkRange`(各軸`Math.abs(...) <= range`の単純比較)にそのまま渡せば「常に範囲内」として機能するため特別扱いは不要。`crossDimension`は同一ディメンション内かどうかの判定(後述)に使う独立したフラグで、T4だけが`true`になる。
+
+### リモート配達ターミナル側の距離判定を新軸から取得するよう変更、あわせて別ディメンションのバグを修正
+
+`remoteDeliveryTerminalItem.ts`の固定値`REMOTE_DELIVERY_RANGE = 32`を廃止し、`onUse`・`remoteDeliveryTerminalUi.ts`の確定時の再チェックの両方で使う共通関数`checkRemoteDeliveryAccess(player, network)`を新設した。
+
+**あわせて発見したバグを修正**: 従来の距離判定は`isWithinNetworkRange(network, player.location, range)`のみで、**プレイヤーが別ディメンションにいる場合のチェックが無かった**(座標だけを比較していたため、別ディメンションでたまたま近い座標にいると誤って通ってしまう可能性があった)。`checkRemoteDeliveryAccess`は`player.dimension.id === network.dimensionId`を先に確認し、一致しない場合は現在のTierの`crossDimension`が`true`(T4)でなければ拒否する。T4で別ディメンションから使う場合は、座標の比較自体が無意味なため距離チェック自体を行わない(`isWithinNetworkRange`を呼ばずに素通りさせる)。同一ディメンションの場合は従来通り`getRemoteAccessRangeForTier(tier)`の距離で`isWithinNetworkRange`をチェックする(T3/T4は`distance`が`Infinity`のため実質常に通る)。
+
+**Tierの取得元をプレイヤーではなくコントローラ自身のディメンションに変更**: 当初`getAxisTier(player.dimension, ...)`としていたが、T4装着時はプレイヤーがコントローラと別のディメンションにいる状態で呼ばれうる(そもそも`player.dimension`がコントローラのブロックとは無関係になる)ため、`world.getDimension(network.dimensionId)`(ネットワーク自身のディメンション)からTierを取得するように修正した。
+
+### 長距離使用時のチャンク常時読み込み(新規`remoteAccessChunkLoading.ts`)
+
+`orderProcessing.ts`のFIFO消化処理は`dimension.getBlock(loc)`でストレージ/ターミナルのコンテナを取得する作りのため、そのチャンクが未読み込みだと該当ブロックが取得できず、注文が届かないまま不足として確定してしまう(サイレントな失敗)。T1以上の「リモート操作」アップグレードを装着している間は、Bedrock Script APIの`world.tickingAreaManager`(`/tickingarea`コマンド相当)でコントローラ周辺を常時読み込み状態にし、この問題を解消する。
+
+- 範囲は「範囲」軸が取りうる**最大**Tier分(`MAX_MEMBER_RADIUS = 16`マス)をコントローラ中心に固定でカバーする。現在の範囲軸Tierではなく最大値を使うのは、範囲軸を後から上げても再計算不要にするため(倉庫の実体(ストレージ等)は範囲軸の制約内にしか存在しえないため、リモート操作軸のTier(プレイヤー側がどこまで離れて使えるか)とは無関係にこのサイズで十分)。Y方向は`dimension.heightRange`(ディメンションごとに異なるため動的に取得)。
+- `syncTickingAreaForNetwork(dimension, network, active)`: `active`が`true`なら`wh_remote_${network.id}`という識別子で(無ければ)`hasCapacity`を確認した上で`createTickingArea`する。`false`なら(存在すれば)`removeTickingArea`する。`createTickingArea`は非同期でエラーを投げうる(`TickingAreaError`: 容量上限超過等)ため、失敗時はコンソール警告のみに留め、機能自体は握りつぶして継続する(致命的にしない)。
+- `removeTickingAreaForNetwork(networkId)`: `controllerBlock.ts`の`onPlayerBreak`から`destroyNetwork`の直前に呼び、コントローラ解体時にticking areaを残さない。
+- `reconcileAllRemoteAccessChunkLoading()`: ワールド起動時に全ネットワークを走査し、現在のTierと実際のticking area有無を一致させる自己修復関数(ticking areaがワールド再読み込みをまたいで正しく保持されるか不確実なため)。`main.ts`から起動時に1回だけ呼ぶ(ticking areaの変化は軸のTier変更時の`onTierChanged`で即座に反映されるため、起動時の自己修復だけで十分)。
+
+**循環import回避**: `remoteAccessChunkLoading.ts`は意図的に`controllerAxes.ts`をimportしない(`active: boolean`を呼び出し元から受け取るだけにする)。逆に`controllerAxes.ts`は`remoteAccessChunkLoading.ts`をimportする、という一方向の依存関係にした(31章の`editingSession.ts`/`memberHighlight.ts`と同じ回避パターン)。
+
+**`system.run`での遅延実行**: `world.tickingAreaManager`はスクリプト読み込み直後のタイミングでは呼べない(restricted-execution mode)ため、`main.ts`の起動時自己修復呼び出しは`system.run(() => reconcileAllRemoteAccessChunkLoading())`で次tickまで遅らせている。
+
+### 見た目・レシピ
+
+キットアイテム(`wh:remote_access_kit_tier1`〜`4`)は`range_kit_tier*.json`(BP)・lang・`itemDescriptions.ts`の`buildRangeKitLore`と全く同じ構成で複製した(値は`getRemoteAccessRangeForTier`から動的取得。T4は`Infinity`をそのまま表示せず「同一ディメンション内どこでも」に置き換える`formatRemoteAccessDistance`を用意した)。アイコンは`tools/generate-placeholder-icon.mjs`に速度(菱形)/周期(リング)/範囲(四角い枠)に続く4つ目の形として、中央の十字+外周4方向の短い目盛りからなる照準(レティクル)風の`upgradeKitCrossColorAt`を追加した。
+
+レシピはユーザー指定の「Cタイプ」(範囲軸と同じ進行シンボルの階段: 鉄→ダイヤモンド→ネザライトインゴット→ヘビーコア)と意味シンボル(T1: エンダーアイ/T2: 氷/T3: 雪玉/T4: リカバリーコンパス)を、4章「クラフトレシピ: アップグレードキット・コントローラ」記載のTierごとの固定パターンにそのまま当てはめて作成した(Tier1/2: `["A A","BCB","A A"]`、Tier3: `[" A ","ABA"," C "]`、Tier4: `["ABA","ACA","ADA"]`でA=Tier1の意味シンボル固定)。

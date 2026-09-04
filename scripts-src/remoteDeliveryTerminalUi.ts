@@ -1,13 +1,12 @@
 import { ItemStack, Player, system, world } from "@minecraft/server";
 import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } from "@minecraft/server-ui";
 import { getControllerName } from "./controllerSettings";
-import { isWithinNetworkRange } from "./network";
 import { hasActiveDeliveryOrderFor, listActiveOrders, submitOrder } from "./orderProcessing";
 import {
+  checkRemoteDeliveryAccess,
   getHeldRemoteDeliveryTerminal,
   getRemoteNotifyOnComplete,
   getRemoteTerminalName,
-  REMOTE_DELIVERY_RANGE,
   setRemoteNotifyOnComplete,
   setRemoteTerminalName,
   unlinkHeldItem,
@@ -39,8 +38,9 @@ function setupWithdrawTab(
       player.sendMessage("§cリモート配達ターミナルを手放しています。");
       return false;
     }
-    if (!isWithinNetworkRange(network, player.location, REMOTE_DELIVERY_RANGE)) {
-      player.sendMessage(`§cリンク先のコントローラから${REMOTE_DELIVERY_RANGE}マスを超えているため送信できません。`);
+    const accessError = checkRemoteDeliveryAccess(player, network);
+    if (accessError) {
+      player.sendMessage(accessError);
       return false;
     }
 

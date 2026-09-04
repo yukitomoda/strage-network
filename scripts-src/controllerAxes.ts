@@ -1,11 +1,13 @@
-import { Block, Dimension, Player } from "@minecraft/server";
+import { Block, Dimension, Player, world } from "@minecraft/server";
 import {
   findNetworkByController,
   findPhysicalStoragePair,
+  getAllNetworks,
   pruneOutOfRangeMembers,
 } from "./network";
 import { resetObserverSignal } from "./networkObserverProcessing";
 import { removeSettingsEntity as removeObserverSettingsEntity } from "./observerSettings";
+import { syncTickingAreaForNetwork } from "./remoteAccessChunkLoading";
 import { removeSettingsEntity as removeStorageSettingsEntity } from "./storageSettings";
 import { getAxisTier, UpgradeAxis } from "./upgrade";
 
@@ -89,7 +91,90 @@ export const CONTROLLER_RANGE_AXIS: UpgradeAxis = {
   onTierChanged: pruneRangeAxisMembers,
 };
 
+// コントローラの「リモート操作」アップグレード軸(リモート配達ターミナル(アイテム)を
+// コントローラからどれだけ離れて使えるか。remoteDeliveryTerminalItem.ts/Ui.ts参照)。
+// 「距離」と「別ディメンションからの使用可否」は独立した軸内パラメータとして持つ(T3は
+// 同一ディメンション内は距離無制限、T4はそれに加えて別ディメンションからも使える。
+// ユーザー要望による変更)。distance: Infinityは、network.tsのisWithinNetworkRange
+// (各軸Math.abs(...) <= rangeの単純比較)にそのまま渡せば「常に範囲内」として機能するため
+// 特別扱いしていない。crossDimension: trueのTierでは、そもそも別ディメンションだと座標の
+// 比較自体が無意味なため、距離チェック自体を行わない(呼び出し元のremoteDeliveryTerminalItem.ts
+// のcheckRemoteDeliveryAccess参照)。
+interface RemoteAccessTierConfig {
+  distance: number;
+  crossDimension: boolean;
+}
+
+const REMOTE_ACCESS_TABLE: RemoteAccessTierConfig[] = [
+  { distance: 32, crossDimension: false }, // tier0(未装着時の現状維持)
+  { distance: 64, crossDimension: false }, // tier1
+  { distance: 256, crossDimension: false }, // tier2
+  { distance: Infinity, crossDimension: false }, // tier3: 同一ディメンション内どこでも
+  { distance: Infinity, crossDimension: true }, // tier4: 異なるディメンションを含めどこでも
+];
+
+function remoteAccessConfigForTier(tier: number): RemoteAccessTierConfig {
+  return REMOTE_ACCESS_TABLE[tier] ?? REMOTE_ACCESS_TABLE[0];
+}
+
+export function getRemoteAccessRangeForTier(tier: number): number {
+  return remoteAccessConfigForTier(tier).distance;
+}
+
+export function getRemoteAccessCrossDimensionForTier(tier: number): boolean {
+  return remoteAccessConfigForTier(tier).crossDimension;
+}
+
+// distanceがInfinityの場合、そのまま数値表示せず専用の文言に置き換える(itemDescriptions.ts/
+// controllerUi.tsで表示形式を揃えるための共通ヘルパー)。crossDimensionの有無でT3/T4の文言を
+// 分ける。
+export function formatRemoteAccessDistance(tier: number): string {
+  const config = remoteAccessConfigForTier(tier);
+  if (Number.isFinite(config.distance)) return `${config.distance}`;
+  return config.crossDimension ? "どこでも" : "同一ディメンション内";
+}
+
+// リモート操作軸だけが持つ副作用: Tierが1以上になったらコントローラ周辺のticking areaを
+// 作成し、0に戻ったら削除する(remoteAccessChunkLoading.ts参照)。
+function syncRemoteAccessChunkLoading(dimension: Dimension, block: Block): void {
+  const network = findNetworkByController(dimension.id, block.location);
+  if (!network) return;
+  const tier = getAxisTier(dimension, block.location, CONTROLLER_REMOTE_ACCESS_AXIS);
+  syncTickingAreaForNetwork(dimension, network, tier >= 1);
+}
+
+export const CONTROLLER_REMOTE_ACCESS_AXIS: UpgradeAxis = {
+  id: "controller_remote_access",
+  label: "リモート操作",
+  blockTypeId: CONTROLLER_BLOCK_ID,
+  stateKey: "wh:remote_access_tier",
+  kitItemIds: [
+    "wh:remote_access_kit_tier1",
+    "wh:remote_access_kit_tier2",
+    "wh:remote_access_kit_tier3",
+    "wh:remote_access_kit_tier4",
+  ],
+  onTierChanged: syncRemoteAccessChunkLoading,
+};
+
 // コントローラが持つ全アップグレード軸。upgradeKit.tsのアイテム対応表・controllerBlock.tsの
 // onPlayerBreakのドロップ処理・controllerUi.tsのアップグレードタブ表示はここを見て軸ごとに
 // 処理するので、軸を増やす時はこの配列に加えるだけでよい。
-export const CONTROLLER_AXES: UpgradeAxis[] = [CONTROLLER_SPEED_AXIS, CONTROLLER_CYCLE_AXIS, CONTROLLER_RANGE_AXIS];
+export const CONTROLLER_AXES: UpgradeAxis[] = [
+  CONTROLLER_SPEED_AXIS,
+  CONTROLLER_CYCLE_AXIS,
+  CONTROLLER_RANGE_AXIS,
+  CONTROLLER_REMOTE_ACCESS_AXIS,
+];
+
+// ワールド起動時に1回呼ぶ自己修復(main.ts参照)。ticking areaがワールド再読み込みをまたいで
+// 残るか不確実なため、全ネットワークを走査し「リモート操作Tier1以上ならticking areaがある」
+// という状態に収束させる。Tier変更時はonTierChanged(syncRemoteAccessChunkLoading)で即座に
+// 反映されるため、この関数はここでしか呼ばない(毎tickの定期実行はしない)。
+export function reconcileAllRemoteAccessChunkLoading(): void {
+  for (const network of getAllNetworks()) {
+    const dimension = world.getDimension(network.dimensionId);
+    const tier = getAxisTier(dimension, network.controller, CONTROLLER_REMOTE_ACCESS_AXIS);
+    syncTickingAreaForNetwork(dimension, network, tier >= 1);
+  }
+}

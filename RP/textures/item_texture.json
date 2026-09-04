@@ -61,6 +61,18 @@
     },
     "wh_remote_delivery_terminal_icon": {
       "textures": "textures/items/remote_delivery_terminal_icon"
+    },
+    "wh_remote_access_kit_tier1": {
+      "textures": "textures/items/remote_access_kit_tier1"
+    },
+    "wh_remote_access_kit_tier2": {
+      "textures": "textures/items/remote_access_kit_tier2"
+    },
+    "wh_remote_access_kit_tier3": {
+      "textures": "textures/items/remote_access_kit_tier3"
+    },
+    "wh_remote_access_kit_tier4": {
+      "textures": "textures/items/remote_access_kit_tier4"
     }
   }
 }

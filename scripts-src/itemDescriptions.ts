@@ -1,5 +1,12 @@
 import { RawMessage, world } from "@minecraft/server";
-import { CONTROLLER_CYCLE_AXIS, CONTROLLER_RANGE_AXIS, CONTROLLER_SPEED_AXIS, getRangeForTier } from "./controllerAxes";
+import {
+  CONTROLLER_CYCLE_AXIS,
+  CONTROLLER_RANGE_AXIS,
+  CONTROLLER_REMOTE_ACCESS_AXIS,
+  CONTROLLER_SPEED_AXIS,
+  formatRemoteAccessDistance,
+  getRangeForTier,
+} from "./controllerAxes";
 import { getDepositThroughput } from "./depositProcessing";
 import { getCycleIntervalTicks } from "./networkProcessing";
 import { getOrderThroughput } from "./orderProcessing";
@@ -143,6 +150,28 @@ function buildRangeKitLore(tier: number): RawMessage[] {
   ];
 }
 
+// リモート操作強化キット: 速度/周期/範囲強化キットと同じ発想。T3/T4は距離がInfinityを返す
+// (network.tsのisWithinNetworkRangeにそのまま渡せば「常に範囲内」として機能するため。
+// docs/design.md参照)ので、formatRemoteAccessDistance(controllerAxes.ts、controllerUi.tsの
+// アップグレードタブ表示と共通)でそのまま数値表示せず専用の文言に置き換える(T4はさらに
+// 別ディメンションからの使用可否も文言に含む)。
+function buildRemoteAccessKitLore(tier: number): RawMessage[] {
+  const maxTier = getAxisMaxTier(CONTROLLER_REMOTE_ACCESS_AXIS);
+  return [
+    { translate: "item.wh:remote_access_kit.desc.summary" },
+    BLANK_LINE,
+    {
+      rawtext: [
+        { translate: "item.wh:remote_access_kit.desc.range" },
+        { text: formatRemoteAccessDistance(tier) },
+      ],
+    },
+    BLANK_LINE,
+    { text: `§7§oTier §r§o${tier} §7§o/ ${maxTier}` },
+    ADDON_SIGNATURE_LINE,
+  ];
+}
+
 // Bedrockにはアイテム"型"に静的な説明文を持たせる仕組みが無い(minecraft:display_nameは
 // 名前のみ)ため、対応表はここでitemId -> Loreの行配列(または動的に組み立てる関数)として持つ。
 // 1要素=1行。
@@ -170,6 +199,10 @@ const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
   "wh:range_kit_tier2": () => buildRangeKitLore(2),
   "wh:range_kit_tier3": () => buildRangeKitLore(3),
   "wh:range_kit_tier4": () => buildRangeKitLore(4),
+  "wh:remote_access_kit_tier1": () => buildRemoteAccessKitLore(1),
+  "wh:remote_access_kit_tier2": () => buildRemoteAccessKitLore(2),
+  "wh:remote_access_kit_tier3": () => buildRemoteAccessKitLore(3),
+  "wh:remote_access_kit_tier4": () => buildRemoteAccessKitLore(4),
 };
 
 export function startItemDescriptionWatcher(): void {

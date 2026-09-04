@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:remote_access_kit_tier3"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:snowball" },
+      "B": { "item": "wh:remote_access_kit_tier2" },
+      "C": { "item": "minecraft:netherite_ingot" }
+    },
+    "pattern": [" A ", "ABA", " C "],
+    "result": { "item": "wh:remote_access_kit_tier3" },
+    "unlock": [{ "item": "wh:remote_access_kit_tier2" }]
+  }
+}

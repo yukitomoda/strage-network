@@ -22,6 +22,10 @@ item.wh:range_kit_tier1=T1 Range Expansion Kit
 item.wh:range_kit_tier2=T2 Range Expansion Kit
 item.wh:range_kit_tier3=T3 Range Expansion Kit
 item.wh:range_kit_tier4=T4 Range Expansion Kit
+item.wh:remote_access_kit_tier1=T1 Remote Access Kit
+item.wh:remote_access_kit_tier2=T2 Remote Access Kit
+item.wh:remote_access_kit_tier3=T3 Remote Access Kit
+item.wh:remote_access_kit_tier4=T4 Remote Access Kit
 pack.name=Storage Network - Resource Pack
 pack.description=A storage network addon for personal use
 
@@ -41,6 +45,9 @@ item.wh:cycle_kit.desc.interval=§7Cycle interval: §r
 
 item.wh:range_kit.desc.summary=§7§oLets the controller connect storages/terminals from farther away.
 item.wh:range_kit.desc.range=§7Range: §r
+
+item.wh:remote_access_kit.desc.summary=§7§oLets you use a remote delivery terminal farther away from its linked controller.
+item.wh:remote_access_kit.desc.range=§7Usable distance: §r
 
 item.wh:controller.desc.1=§7§oA controller for building a warehouse network.
 

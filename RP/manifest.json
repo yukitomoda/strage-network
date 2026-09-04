@@ -4,20 +4,20 @@
     "name": "Storage Network (Dev) - Resource Pack",
     "description": "個人利用向けの倉庫(ストレージネットワーク)アドオン (リソースパック)",
     "uuid": "d75168b3-89a2-49cf-ba6e-bcbc9d5a16ae",
-    "version": [0, 6, 3],
+    "version": [0, 7, 0],
     "min_engine_version": [1, 26, 0]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "05ef7c78-6dab-4fc0-a824-9ad0907ff96a",
-      "version": [0, 6, 3]
+      "version": [0, 7, 0]
     }
   ],
   "dependencies": [
     {
       "uuid": "290ed4cf-9a04-4ec2-9b8c-9ef37c36653c",
-      "version": [0, 6, 3]
+      "version": [0, 7, 0]
     }
   ]
 }

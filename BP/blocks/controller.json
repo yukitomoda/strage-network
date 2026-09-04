@@ -9,7 +9,8 @@
       "states": {
         "wh:speed_tier": [0, 1, 2, 3, 4],
         "wh:cycle_tier": [0, 1, 2, 3, 4],
-        "wh:range_tier": [0, 1, 2, 3, 4]
+        "wh:range_tier": [0, 1, 2, 3, 4],
+        "wh:remote_access_tier": [0, 1, 2, 3, 4]
       }
     },
     "components": {

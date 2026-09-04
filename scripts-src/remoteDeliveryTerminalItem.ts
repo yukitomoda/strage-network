@@ -1,8 +1,14 @@
-import { Dimension, EquipmentSlot, ItemCustomComponent, ItemStack, Player, Vector3 } from "@minecraft/server";
+import { Dimension, EquipmentSlot, ItemCustomComponent, ItemStack, Player, Vector3, world } from "@minecraft/server";
+import {
+  CONTROLLER_REMOTE_ACCESS_AXIS,
+  getRemoteAccessCrossDimensionForTier,
+  getRemoteAccessRangeForTier,
+} from "./controllerAxes";
 import { getControllerName } from "./controllerSettings";
 import { findNetworkByController, getNetwork, isWithinNetworkRange } from "./network";
-import { generateRemoteDeliveryTerminalName } from "./state";
+import { NetworkData, generateRemoteDeliveryTerminalName } from "./state";
 import { showRemoteDeliveryUi } from "./remoteDeliveryTerminalUi";
+import { getAxisTier } from "./upgrade";
 
 export const REMOTE_DELIVERY_TERMINAL_ITEM_ID = "wh:remote_delivery_terminal";
 
@@ -14,10 +20,31 @@ const LINKED_NETWORK_PROPERTY = "wh:linked_network";
 const NOTIFY_ON_COMPLETE_PROPERTY = "wh:notify_on_complete";
 const TERMINAL_NAME_PROPERTY = "wh:terminal_name";
 
-// コントローラからの距離に応じて使用可否が変わる(ユーザー要望)。アップグレード無しでは
-// 32ブロック固定。将来「範囲」アップグレードキットと同様の仕組みで拡張する予定だが、
-// 今回はこの定数のみで対応する(docs/design.mdの該当章参照)。
-export const REMOTE_DELIVERY_RANGE = 32;
+// コントローラからの距離に応じて使用可否が変わる(ユーザー要望)。「リモート操作」アップグレード軸
+// (controllerAxes.tsのCONTROLLER_REMOTE_ACCESS_AXIS)のTierから距離・別ディメンションからの
+// 使用可否を引く(未装着=Tier0は32ブロック・同一ディメンションのみ固定)。onUse(リモート使用)・
+// remoteDeliveryTerminalUi.tsの確定時の両方で使う共通チェック。Tierはコントローラ自身の
+// ディメンション(player.dimensionではなくnetwork.dimensionId)から引く必要がある
+// (T4装着時はプレイヤーが別ディメンションにいる状態で呼ばれうるため)。
+export function checkRemoteDeliveryAccess(player: Player, network: NetworkData): string | undefined {
+  const controllerDimension = world.getDimension(network.dimensionId);
+  const tier = getAxisTier(controllerDimension, network.controller, CONTROLLER_REMOTE_ACCESS_AXIS);
+  const sameDimension = player.dimension.id === network.dimensionId;
+
+  if (!sameDimension) {
+    if (!getRemoteAccessCrossDimensionForTier(tier)) {
+      return "§cリンク先のコントローラとは別のディメンションにいるため使用できません。";
+    }
+    // 別ディメンションの場合、座標の比較自体が無意味なため距離チェックは行わない。
+    return undefined;
+  }
+
+  const range = getRemoteAccessRangeForTier(tier);
+  if (!isWithinNetworkRange(network, player.location, range)) {
+    return `§cリンク先のコントローラから${range}マスを超えているため使用できません。`;
+  }
+  return undefined;
+}
 
 export function getLinkedNetworkId(item: ItemStack): string | undefined {
   const value = item.getDynamicProperty(LINKED_NETWORK_PROPERTY);
@@ -120,8 +147,9 @@ export const remoteDeliveryTerminalItemComponent: ItemCustomComponent = {
       player.sendMessage("§cリンクされたネットワークが見つかりません(コントローラが解体された可能性があります)。");
       return;
     }
-    if (!isWithinNetworkRange(network, player.location, REMOTE_DELIVERY_RANGE)) {
-      player.sendMessage(`§cリンク先のコントローラから${REMOTE_DELIVERY_RANGE}マスを超えているため使用できません。`);
+    const accessError = checkRemoteDeliveryAccess(player, network);
+    if (accessError) {
+      player.sendMessage(accessError);
       return;
     }
     showRemoteDeliveryUi(player, item, network);

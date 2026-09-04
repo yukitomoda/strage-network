@@ -434,6 +434,31 @@ function upgradeKitSquareColorAt(tint) {
 
 const rangeKitColorAtByTier = UPGRADE_TIER_TINTS.map((tint) => upgradeKitSquareColorAt(tint));
 
+// 「リモート操作」軸のキット: 速度(菱形)/周期(リング)/範囲(四角い枠)と見分けが付くよう、
+// 照準(レティクル)のような十字+外周の4つの短いマークの形にする。「遠くを狙う/操作する」を
+// 連想させる形として選んだ。
+function upgradeKitCrossColorAt(tint) {
+  return (u, v) => {
+    const dx = Math.abs(u - 0.5);
+    const dy = Math.abs(v - 0.5);
+    const dist = Math.hypot(dx, dy);
+
+    // 中心の十字(縦棒・横棒)
+    const inCross = (dx < 0.06 && dy < 0.32) || (dy < 0.06 && dx < 0.32);
+    // 外周4方向の短いマーク(照準の目盛り)
+    const onAxis = dx < 0.06 || dy < 0.06;
+    const inTick = onAxis && dist > 0.36 && dist < 0.46;
+
+    if (inCross || inTick) {
+      const n = (hashNoise(u, v) - 0.5) * 12;
+      return [clampByte(tint[0] + n), clampByte(tint[1] + n), clampByte(tint[2] + n), 255];
+    }
+    return [0, 0, 0, 0];
+  };
+}
+
+const remoteAccessKitColorAtByTier = UPGRADE_TIER_TINTS.map((tint) => upgradeKitCrossColorAt(tint));
+
 // レンチアイテム: 透過背景に、斜めの柄+片側に開口部のある輪(スパナの口)+反対側に丸い柄尻、
 // という実際のスパナのシルエットに近いアイコン。
 function wrenchColorAt(u, v) {
@@ -555,6 +580,9 @@ cycleKitColorAtByTier.forEach((colorAt, i) => {
 });
 rangeKitColorAtByTier.forEach((colorAt, i) => {
   writePng(`RP/textures/items/range_kit_tier${i + 1}.png`, 16, colorAt);
+});
+remoteAccessKitColorAtByTier.forEach((colorAt, i) => {
+  writePng(`RP/textures/items/remote_access_kit_tier${i + 1}.png`, 16, colorAt);
 });
 writePng("RP/textures/entity/range_indicator.png", 16, rangeIndicatorColorAt);
 writePng("RP/textures/entity/member_highlight.png", 4, memberHighlightColorAt);

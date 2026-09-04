@@ -1,6 +1,7 @@
 import { system } from "@minecraft/server";
 import { autoTerminalBlockComponent } from "./autoTerminalBlock";
 import { controllerBlockComponent } from "./controllerBlock";
+import { reconcileAllRemoteAccessChunkLoading } from "./controllerAxes";
 import { inventoryTerminalBlockComponent } from "./inventoryTerminalBlock";
 import { startItemDescriptionWatcher } from "./itemDescriptions";
 import { networkObserverBlockComponent } from "./networkObserverBlock";
@@ -44,3 +45,8 @@ startWrenchHighlightLoop();
 startDeliveryProgressLoop();
 startPadProgressLoop();
 startItemDescriptionWatcher();
+// world.tickingAreaManagerはこのスクリプト読み込み直後のタイミングでは呼べないため
+// (restricted-execution mode)、system.runで次tickまで遅らせる。「リモート操作」アップグレードを
+// 装着済みのコントローラのticking areaを、ワールド再読み込み後も正しい状態へ収束させる自己修復
+// (controllerAxes.ts参照)。
+system.run(() => reconcileAllRemoteAccessChunkLoading());

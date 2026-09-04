@@ -22,6 +22,10 @@ item.wh:range_kit_tier1=T1 範囲拡張キット
 item.wh:range_kit_tier2=T2 範囲拡張キット
 item.wh:range_kit_tier3=T3 範囲拡張キット
 item.wh:range_kit_tier4=T4 範囲拡張キット
+item.wh:remote_access_kit_tier1=T1 リモート操作キット
+item.wh:remote_access_kit_tier2=T2 リモート操作キット
+item.wh:remote_access_kit_tier3=T3 リモート操作キット
+item.wh:remote_access_kit_tier4=T4 リモート操作キット
 pack.name=Storage Network - リソースパック
 pack.description=個人利用向けの倉庫(ストレージネットワーク)アドオン
 
@@ -41,6 +45,9 @@ item.wh:cycle_kit.desc.interval=§7処理周期: §r
 
 item.wh:range_kit.desc.summary=§7§oコントローラの接続可能範囲が広がるようになります。
 item.wh:range_kit.desc.range=§7範囲: §r
+
+item.wh:remote_access_kit.desc.summary=§7§oリモート配達ターミナルをコントローラから離れた場所でも使えるようになります。
+item.wh:remote_access_kit.desc.range=§7操作可能距離: §r
 
 item.wh:controller.desc.1=§7§o倉庫ネットワークを構築するためのコントローラ。
 
