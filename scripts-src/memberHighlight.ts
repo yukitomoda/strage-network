@@ -96,13 +96,16 @@ function computeEdgeProperties(loc: Vector3, isMember: (l: Vector3) => boolean):
 
 type ThinFacing = "north" | "south" | "east" | "west" | "up" | "down";
 
-// 実機確認で、張り付き面(terminalBlock.tsのgetBlockFacing)の値をそのまま使うと強調表示の
-// 向きが逆になることが分かった(ユーザー指摘)。エンティティ側のジオメトリ(RP/models/entity/
-// member_highlight.geo.jsonのthin_*ボーン)とブロックのローカル座標系との向きの食い違いによる
-// ものと思われるが、理論的な整合性よりも実機での見た目を優先し、反対向きに変換してから使う。
-const OPPOSITE_FACING: Record<string, ThinFacing> = {
-  north: "south",
-  south: "north",
+// 実機確認で、張り付き面(terminalBlock.tsのgetBlockFacing)の値をそのまま使うと東西方向の
+// 強調表示の向きが逆になることが分かった(エンティティ側のジオメトリ、RP/models/entity/
+// member_highlight.geo.jsonのthin_*ボーンとブロックのローカル座標系との向きの食い違いによる
+// ものと思われる)ため、東西だけ反対向きに変換していた。しかし後日、**南北方向はそのまま
+// 使うのが正しく、東西と同じように反転すると逆になる**という報告を受けた(東西と南北とで
+// 実機の見え方が対称ではない。理論的な原因は未特定)。そのため、南北はそのまま・東西だけ
+// 反転する非対称なマッピングにしている(上下は今のところ問題の報告が無いため反転のまま)。
+const HIGHLIGHT_FACING_MAP: Record<string, ThinFacing> = {
+  north: "north",
+  south: "south",
   east: "west",
   west: "east",
   up: "down",
@@ -110,7 +113,7 @@ const OPPOSITE_FACING: Record<string, ThinFacing> = {
 };
 
 function highlightFacing(facing: string | undefined): ThinFacing {
-  return OPPOSITE_FACING[facing ?? "north"] ?? "south";
+  return HIGHLIGHT_FACING_MAP[facing ?? "north"] ?? "north";
 }
 
 type HighlightPoint = { loc: Vector3; drain: boolean };
