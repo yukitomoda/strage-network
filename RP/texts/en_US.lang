@@ -28,7 +28,7 @@ item.wh:remote_access_kit_tier2=T2 Remote Access Kit
 item.wh:remote_access_kit_tier3=T3 Remote Access Kit
 item.wh:remote_access_kit_tier4=T4 Remote Access Kit
 pack.name=Storage Network - Resource Pack
-pack.description=A storage network addon for personal use v0.8.4
+pack.description=A storage network addon for personal use v0.8.5
 
 wh.addon_name=Storage Network
 
