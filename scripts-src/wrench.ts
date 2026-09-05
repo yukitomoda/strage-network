@@ -37,19 +37,29 @@ const HIGHLIGHT_INTERVAL = 10;
 // と同じ枠組み)にする想定だが、現時点では未実装(docs/design.md参照)。
 const MAX_OBSERVERS_PER_NETWORK = 3;
 
-// onUse は「ブロックに対して使った場合」も(onUseOnとは別に)発火してしまうため、
-// 視線の先にブロックが無い(=本当に空中で使った)場合だけモードメニューを開く。
-// 実際のブロック操作の到達距離とは厳密には一致しなくてよく、あくまで
-// 「ブロックを操作したその右クリックでメニューが誤って開かない」ことが目的の判定。
+// onUse は「ブロックに対して使った場合」も(onUseOnとは別に)発火してしまう。当初は視線の先に
+// 何らかのブロックが少しでもあれば一律でメニューを諦めていたが、それだと壁際やブロックが
+// 密集した場所ではまず空中に視線を外さないとメニューを開けず不便すぎる(ユーザー指摘)。
+// onUseOnが実際に何かを処理するのは、(a)視線の先がコントローラの場合(編集セッションの
+// 開始/終了)、(b)ネットワーク編集セッション中に何らかのブロックへ使った場合(接続/切断・
+// Drain指定)の2パターンだけなので、この2パターンに該当する時だけメニューを諦めれば十分
+// (誤ってメニューと本来の操作が同時に発火する事故を避けつつ、それ以外の場面ではブロックが
+// 視線の先にあってもメニューを開けるようにする)。実際のブロック操作の到達距離とは
+// 厳密には一致しなくてよい。
 const AIR_USE_RAYCAST_DISTANCE = 8;
 
 export const wrenchItemComponent: ItemCustomComponent = {
-  // 空中(ブロックを対象としない)で使った時: モード選択メニューを開く。
+  // モード選択メニューを開く(視線の先に何もない場合、または何かあっても
+  // onUseOnが処理しない場合)。
   onUse(event) {
     const player = event.source;
     if (!(player instanceof Player)) return;
     const hit = player.getBlockFromViewDirection({ maxDistance: AIR_USE_RAYCAST_DISTANCE });
-    if (hit) return; // ブロックに対する使用(onUseOnが別途処理する)。メニューは開かない。
+    const targetTypeId = hit?.block.typeId;
+    if (targetTypeId === "wh:controller") return; // onUseOnがコントローラの編集開始/終了を処理する
+    if (targetTypeId !== undefined && getEditingNetworkId(player) !== undefined) {
+      return; // 編集セッション中はonUseOnが接続/切断・Drain指定を処理する
+    }
     showToolModeUi(player);
   },
   onUseOn(event) {

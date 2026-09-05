@@ -114,8 +114,12 @@ export function setRemoteTerminalName(player: Player, name: string): void {
   );
 }
 
-// wrench.tsのAIR_USE_RAYCAST_DISTANCEと同じ考え方: onUseは「ブロックに対して使った場合」も
-// (onUseOnとは別に)発火してしまうため、視線の先にブロックが無い場合だけリモート使用として扱う。
+// onUseは「ブロックに対して使った場合」も(onUseOnとは別に)発火してしまう。当初は視線の先に
+// 何らかのブロックが少しでもあれば一律でリモート使用を諦めていたが、それだと壁際やブロックが
+// 密集した場所ではまず空中に視線を外さないとUIを開けず不便すぎる(ユーザー指摘)。onUseOnが
+// 実際に処理するのは`wh:controller`をリンクする場合だけなので、視線の先が**コントローラで
+// ある場合だけ**リモート使用を諦めれば十分(コントローラへのリンクとリモートUIが同時に
+// 発火する事故を避けつつ、それ以外のブロックが視線の先にあってもリモートUIを開けるようにする)。
 const AIR_USE_RAYCAST_DISTANCE = 8;
 
 export const remoteDeliveryTerminalItemComponent: ItemCustomComponent = {
@@ -127,12 +131,12 @@ export const remoteDeliveryTerminalItemComponent: ItemCustomComponent = {
     if (block.typeId !== "wh:controller") return;
     linkToController(player, block.dimension, block.location);
   },
-  // 空中で使った場合: リンク済み・範囲内ならリモートUIを開く。
+  // コントローラ以外(空中を含む)で使った場合: リンク済み・範囲内ならリモートUIを開く。
   onUse(event) {
     const player = event.source;
     if (!(player instanceof Player)) return;
     const hit = player.getBlockFromViewDirection({ maxDistance: AIR_USE_RAYCAST_DISTANCE });
-    if (hit) return; // ブロックに対する使用はonUseOnが処理する
+    if (hit?.block.typeId === "wh:controller") return; // コントローラへのリンクはonUseOnが処理する
 
     const item = getHeldRemoteDeliveryTerminal(player);
     if (!item) return;
