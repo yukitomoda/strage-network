@@ -1,4 +1,4 @@
-import { Dimension, Vector3 } from "@minecraft/server";
+import { Block, BlockPermutation, Dimension, Vector3 } from "@minecraft/server";
 import { displayKeyEquals } from "./itemIdentity";
 import { NETWORK_OBSERVER_BLOCK_ID } from "./networkObserverBlock";
 import { getObserverSettings } from "./observerSettings";
@@ -8,6 +8,14 @@ import { CatalogEntry, scanCatalog } from "./storageScan";
 // BlockPermutation.getState/withStateの型はバニラの既知ステートのみを対象にしたジェネリックで、
 // カスタムステート名は型に存在しないため、upgrade.tsと同じ理由でasキャストする。
 const SIGNAL_STATE = "wh:signal_strength";
+
+// upgrade.tsのsetAxisTierと同じ理由(既存のブロックにそのstateが無かった時点のワールドで
+// block.permutation.withState()を呼ぶと例外を投げる不具合の回避)で、BlockPermutation.resolve()
+// による組み立て直しに統一している。docs/design.md参照。
+function setBlockState(block: Block, stateKey: string, value: number): void {
+  const states = { ...block.permutation.getAllStates(), [stateKey]: value };
+  block.setPermutation(BlockPermutation.resolve(block.typeId, states as any));
+}
 
 function countOf(catalog: CatalogEntry[], itemTypeId: string | undefined, itemName: string | undefined): number {
   if (!itemTypeId) return 0;
@@ -54,7 +62,7 @@ export function recalculateNetworkObservers(dimension: Dimension, network: Netwo
 
     const settings = getObserverSettings(dimension, loc);
     const signal = settings ? computeSignalStrength(catalog, settings) : 0;
-    block.setPermutation(block.permutation.withState(SIGNAL_STATE as any, signal as any));
+    setBlockState(block, SIGNAL_STATE, signal);
   }
 }
 
@@ -65,5 +73,5 @@ export function recalculateNetworkObservers(dimension: Dimension, network: Netwo
 export function resetObserverSignal(dimension: Dimension, loc: Vector3): void {
   const block = dimension.getBlock(loc);
   if (!block?.isValid || block.typeId !== NETWORK_OBSERVER_BLOCK_ID) return;
-  block.setPermutation(block.permutation.withState(SIGNAL_STATE as any, 0 as any));
+  setBlockState(block, SIGNAL_STATE, 0);
 }

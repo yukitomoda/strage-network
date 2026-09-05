@@ -1204,3 +1204,30 @@ vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、e
 - **注ぎ込み方向**: ネットワークの満タンバケツを消費して液体をワールド/大釜に戻す動作は、waterloggedブロックとの整合や設置先の空き確認など検討事項が増えるため見送った。
 - **ポーション/粉雪/染料入り大釜**: アイテム側にNBT的な効果情報を持たせる必要があり、このアドオンの「アイテムはtypeId+個数だけ見る」という既存のスタック管理方針と相性が悪いため見送った。
 - **レシピ**: 未定。別途相談の上で追加する。
+
+## 35. 既存ワールドでのアップグレード不具合を修正(`BlockPermutation.withState`の落とし穴)
+
+ユーザーから「0.6.0以前から使っているワールドを0.7.0(33章「リモート操作」軸追加)へ更新したところ、コントローラにリモート操作アップグレードキットを使ってもアップグレードできない」との報告があった。速度/周期/範囲の既存3軸は問題なく動作するとのこと。
+
+### 原因: `withState`は対象のブロックインスタンスが過去に一度もそのstateを持ったことがないと失敗しうる
+
+`upgrade.ts`の`setAxisTier`は`block.setPermutation(block.permutation.withState(axis.stateKey, tier))`という実装だった。`BlockPermutation.withState()`は**既存のpermutationオブジェクトから1つのstateだけを差し替えた新しいpermutationを作る**API(APIドキュメント上も`@throws`と明記されている)。`wh:remote_access_tier`はコントローラに4本目の軸として33章で追加したstateであり、それより前に設置された(=そのstateを一度も持ったことがない)ワールドのコントローラに対して`withState("wh:remote_access_tier", ...)`を呼ぶと例外を投げてしまう。`ItemCustomComponent.onUseOn`内での例外は握りつぶされてプレイヤーには何も表示されないため、「キットを使っても何も起きない(エラーも出ない)」という報告内容と一致する。速度/周期/範囲の3軸はコントローラ導入当初から存在するstateのため、ユーザーのワールドでは既に一度でも値を持ったことがあり、この問題を踏まなかったと考えられる。
+
+### 修正: `BlockPermutation.resolve()`でtypeIdから組み立て直す
+
+`BlockPermutation.resolve(blockName, states)`は、対象ブロックインスタンスの過去の履歴に関係なく、**現在ロード中のビヘイビアパックの型定義に基づいて**permutationを新規に組み立てる(公式ドキュメントの用例もこの使い方)。`setAxisTier`を次のように変更した:
+
+```ts
+export function setAxisTier(block: Block, axis: UpgradeAxis, tier: number): void {
+  const states = { ...block.permutation.getAllStates(), [axis.stateKey]: tier };
+  block.setPermutation(BlockPermutation.resolve(block.typeId, states as any));
+}
+```
+
+`getAllStates()`で読める既存の値(古いワールドでまだ持ったことのないstateはここには含まれず、`resolve()`側で現在の型定義のデフォルト値が補われる)を丸ごと引き継いだ上で、対象の軸のstateだけ上書きして渡すことで、他の軸のTierを失わずに済む。
+
+### 同じ落とし穴を持っていた`networkObserverProcessing.ts`にも同じ修正を適用
+
+ネットワークオブザーバーの`wh:signal_strength`更新(`recalculateNetworkObservers`/`resetObserverSignal`)も全く同じ`block.permutation.withState(...)`パターンを使っていた。`wh:signal_strength`はネットワークオブザーバー導入時からの唯一のstateのため今回の報告には直結していないが、将来同じブロックに新しいstateを追加した際に同じ不具合を踏む潜在リスクがあったため、同じ`BlockPermutation.resolve()`方式の共通ヘルパー`setBlockState(block, stateKey, value)`に統一した。
+
+**教訓**: カスタムブロックのstateを後から追加する場合、既存ワールドのブロックへの反映は`withState()`では保証されない。`BlockPermutation.resolve(block.typeId, { ...block.permutation.getAllStates(), [新stateKey]: 値 })`の形で組み立て直す方式を今後のデフォルトにする。

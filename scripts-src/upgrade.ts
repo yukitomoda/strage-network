@@ -37,8 +37,20 @@ export function getAxisTierFromPermutation(permutation: BlockPermutation, axis: 
 }
 
 // withStateの引数も同じ理由でカスタムステート名を型が受け付けないため、asでキャストする。
+//
+// 以前はblock.permutation.withState(...)で既存のpermutationから派生させていたが、後から
+// 新しいstate(例: 4本目の軸として追加したwh:remote_access_tier)をブロック定義に追加した場合、
+// そのstateが存在しなかった時点で既に設置されていた古いワールドのブロックに対してwithState()を
+// 呼ぶと例外を投げる不具合が実機で発見された(withStateは既存のpermutationの上に1つのstateだけを
+// 差し替える都合上、対象のブロックインスタンス自身が過去に一度もそのstateを持ったことが
+// なければ失敗しうる)。BlockPermutation.resolve(typeId, states)はブロックのtypeIdから
+// **現在ロード中のビヘイビアパックの定義に基づいて**permutationを新規に組み立て直すため、
+// 古いブロックインスタンス側の事情に左右されない。既存の全stateの値をgetAllStates()で
+// 引き継いだ上で、対象の軸のstateだけ上書きして渡すことで、既存の他の軸のTierを失わずに
+// 済む(docs/design.md参照)。
 export function setAxisTier(block: Block, axis: UpgradeAxis, tier: number): void {
-  block.setPermutation(block.permutation.withState(axis.stateKey as any, tier as any));
+  const states = { ...block.permutation.getAllStates(), [axis.stateKey]: tier };
+  block.setPermutation(BlockPermutation.resolve(block.typeId, states as any));
 }
 
 // 破壊/排出時、そのブロックに装着されていたキットを返す(軸に依存しない共通処理)。
