@@ -7,6 +7,7 @@ tile.wh:delivery_terminal.name=配達ターミナル
 tile.wh:network_observer.name=ネットワークオブザーバー
 tile.wh:io_pad.name=搬入出パッド
 tile.wh:suction_pad.name=吸い込みパッド
+tile.wh:liquid_pump.name=液体ポンプ
 item.wh:wrench=倉庫レンチ
 item.wh:remote_delivery_terminal=リモート配達ターミナル
 item.wh:test_filler=[テスト用] ランダム充填ツール
@@ -60,6 +61,8 @@ item.wh:io_pad.desc.1=§7§oプレイヤーが上に乗ると、設定した所�
 item.wh:io_pad.desc.usage=§7ネットワークに接続し、上に乗って使用します。
 item.wh:suction_pad.desc.1=§7§o上面付近に落ちているアイテムを定期的に回収し、ネットワークへ預け入れるパッド。
 item.wh:suction_pad.desc.usage=§7ネットワークに接続すると使用できます(設定は不要です)。
+item.wh:liquid_pump.desc.1=§7§o設置面の裏側にある水源/溶岩源ブロックや満タンの大釜から液体を汲み出し、バケツに変換してネットワークへ預け入れるポンプ。
+item.wh:liquid_pump.desc.usage=§7ネットワークに接続すると使用できます(設定は不要です)。空バケツの在庫が無いと汲み出せません。
 item.wh:terminal_family.desc.usage=§7ストレージに設置し、ネットワークに接続して使用します。
 
 item.wh:remote_delivery_terminal.desc.1=§7§o事前にコントローラとリンクしておくと、離れた場所でも配達ターミナルと同じように引き出しができる端末。

@@ -31,6 +31,12 @@
     },
     "wh:suction_pad_side": {
       "textures": "textures/blocks/suction_pad_side"
+    },
+    "wh:liquid_pump_face": {
+      "textures": "textures/blocks/liquid_pump_face"
+    },
+    "wh:liquid_pump_side": {
+      "textures": "textures/blocks/liquid_pump_side"
     }
   }
 }

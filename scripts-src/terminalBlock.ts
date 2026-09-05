@@ -12,10 +12,11 @@ export const PRECISION_TERMINAL_BLOCK_ID = "wh:precision_terminal";
 export const DELIVERY_TERMINAL_BLOCK_ID = "wh:delivery_terminal";
 export const IO_PAD_BLOCK_ID = "wh:io_pad";
 export const SUCTION_PAD_BLOCK_ID = "wh:suction_pad";
+export const LIQUID_PUMP_BLOCK_ID = "wh:liquid_pump";
 
 // 引き出し・預け入れキュー処理、レンチでの接続対象など、「ターミナルとして扱ってよいブロックか」の判定を
 // 一箇所にまとめる。通常のターミナル・自動端末・在庫管理ターミナル・精密ターミナル・配達ターミナル・
-// 搬入出パッド・吸い込みパッドのいずれも対象。
+// 搬入出パッド・吸い込みパッド・液体ポンプのいずれも対象。
 export function isTerminalLikeBlock(typeId: string): boolean {
   return (
     typeId === TERMINAL_BLOCK_ID ||
@@ -24,14 +25,16 @@ export function isTerminalLikeBlock(typeId: string): boolean {
     typeId === PRECISION_TERMINAL_BLOCK_ID ||
     typeId === DELIVERY_TERMINAL_BLOCK_ID ||
     typeId === IO_PAD_BLOCK_ID ||
-    typeId === SUCTION_PAD_BLOCK_ID
+    typeId === SUCTION_PAD_BLOCK_ID ||
+    typeId === LIQUID_PUMP_BLOCK_ID
   );
 }
 
 // ターミナル系のうち、フルブロックではなく「張り付いた面に対して薄い板」の見た目を持つもの
 // (通常ターミナル/自動端末/在庫管理ターミナル/精密ターミナル/配達ターミナル。搬入出パッド・
-// 吸い込みパッドはフルブロックのため対象外)。memberHighlight.tsが、フルブロック用の立方体の
-// 輪郭ではなく、張り付いている面1面分の枠だけを表示する対象を判定するのに使う(ユーザー要望)。
+// 吸い込みパッド・液体ポンプはフルブロックのため対象外)。memberHighlight.tsが、フルブロック
+// 用の立方体の輪郭ではなく、張り付いている面1面分の枠だけを表示する対象を判定するのに使う
+// (ユーザー要望)。
 export function isThinTerminalBlock(typeId: string): boolean {
   return (
     typeId === TERMINAL_BLOCK_ID ||

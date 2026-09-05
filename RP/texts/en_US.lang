@@ -7,6 +7,7 @@ tile.wh:delivery_terminal.name=Delivery Terminal
 tile.wh:network_observer.name=Network Observer
 tile.wh:io_pad.name=I/O Pad
 tile.wh:suction_pad.name=Suction Pad
+tile.wh:liquid_pump.name=Liquid Pump
 item.wh:wrench=Warehouse Wrench
 item.wh:remote_delivery_terminal=Remote Delivery Terminal
 item.wh:test_filler=[Test] Random Filler
@@ -60,6 +61,8 @@ item.wh:io_pad.desc.1=§7§oA pad that periodically exchanges items with the net
 item.wh:io_pad.desc.usage=§7Connect it to a network and stand on it to use it.
 item.wh:suction_pad.desc.1=§7§oA pad that periodically picks up items dropped near its top and deposits them into the network.
 item.wh:suction_pad.desc.usage=§7Just connect it to a network to use it (no configuration needed).
+item.wh:liquid_pump.desc.1=§7§oA pump that draws liquid from the water/lava source block or full cauldron behind the face it's mounted on, converts it into a bucket, and deposits it into the network.
+item.wh:liquid_pump.desc.usage=§7Just connect it to a network to use it (no configuration needed). Requires empty buckets in stock to draw liquid.
 item.wh:terminal_family.desc.usage=§7Place it on a storage and connect it to a network to use it.
 
 item.wh:remote_delivery_terminal.desc.1=§7§oA terminal that, once linked to a controller, lets you withdraw items just like a delivery terminal from a distance.

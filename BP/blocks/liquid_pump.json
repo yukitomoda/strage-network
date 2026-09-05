@@ -1,0 +1,96 @@
+{
+  "format_version": "1.26.0",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wh:liquid_pump",
+      "menu_category": {
+        "category": "construction"
+      },
+      "traits": {
+        "minecraft:placement_direction": {
+          "enabled_states": [
+            "minecraft:facing_direction"
+          ]
+        }
+      }
+    },
+    "components": {
+      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "wh:liquid_pump_side"
+        },
+        "south": {
+          "texture": "wh:liquid_pump_face"
+        }
+      },
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 2
+      },
+      "minecraft:map_color": "#6a8caf",
+      "minecraft:movable": {
+        "movement_type": "immovable"
+      },
+      "minecraft:redstone_consumer": {
+        "min_power": 0
+      },
+      "wh:liquid_pump": {}
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('minecraft:facing_direction') == 'north'",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "wh:liquid_pump_side" },
+            "north": { "texture": "wh:liquid_pump_face" }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('minecraft:facing_direction') == 'south'",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "wh:liquid_pump_side" },
+            "south": { "texture": "wh:liquid_pump_face" }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('minecraft:facing_direction') == 'east'",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "wh:liquid_pump_side" },
+            "east": { "texture": "wh:liquid_pump_face" }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('minecraft:facing_direction') == 'west'",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "wh:liquid_pump_side" },
+            "west": { "texture": "wh:liquid_pump_face" }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('minecraft:facing_direction') == 'up'",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "wh:liquid_pump_side" },
+            "up": { "texture": "wh:liquid_pump_face" }
+          }
+        }
+      },
+      {
+        "condition": "q.block_state('minecraft:facing_direction') == 'down'",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "wh:liquid_pump_side" },
+            "down": { "texture": "wh:liquid_pump_face" }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -95,6 +95,38 @@ export function extractFromStorages(
   return amount - remaining;
 }
 
+// ストレージから指定アイテムを最大amount個「消費」する(extractFromStoragesと違い、届け先を
+// 持たない。取り出したアイテムはそのまま消滅させる)。液体ポンプ(liquidPumpCheck.ts)が
+// 空バケツをネットワークから1個消費するために新設した、初めての「搬入先を必要としない
+// 消費」処理。戻り値は実際に消費できた数。
+export function consumeFromStorages(dimension: Dimension, network: NetworkData, key: DisplayKey, amount: number): number {
+  let remaining = amount;
+
+  for (const loc of network.storages) {
+    if (remaining <= 0) break;
+    const block = dimension.getBlock(loc);
+    const container = block?.getComponent("inventory")?.container;
+    if (!container) continue;
+
+    for (let i = 0; i < container.size && remaining > 0; i++) {
+      const item = container.getItem(i);
+      if (!item || !displayKeyEquals(displayKeyOf(item), key)) continue;
+
+      const take = Math.min(remaining, item.amount);
+      if (take >= item.amount) {
+        container.setItem(i, undefined);
+      } else {
+        const remainder = item.clone();
+        remainder.amount = item.amount - take;
+        container.setItem(i, remainder);
+      }
+      remaining -= take;
+    }
+  }
+
+  return amount - remaining;
+}
+
 // 「どのストレージに何(displayKey)が既に置かれているか」の索引。key は serializeKey() の値。
 // 大きいネットワーク(例: ラージチェスト30個=1620スロット)で、預け入れする品目ごとに全スロットを
 // 何度も舐め直すと重くなりすぎるため、1tickにつき1回だけ作って使い回す想定(呼び出し元で保持)。

@@ -312,6 +312,44 @@ const precisionTerminalColorAt = terminalFamilyColorAt([250, 140, 140], [110, 30
 // 配達ターミナル: 同じ構図だが、スクリーンが緑系で他の4種と見分けが付く(「受け取り完了」のイメージ)
 const deliveryTerminalColorAt = terminalFamilyColorAt([140, 230, 150], [30, 110, 45]);
 
+// 液体ポンプ: フルブロック(ユーザー要望。搬入出パッド/吸い込みパッドと同じくフルブロック)。
+// 向き(minecraft:facing_direction、設置時にプレイヤーが向いていた方向)に応じて、対象の液体が
+// ある面(BP側permutationsでその面だけmaterial_instancesを差し替える)にバルブ/パイプの開口部
+// (同心円)を持つ専用テクスチャを、それ以外の面には無地の金属パネルを表示する。搬入出パッドの
+// 上面/側面の使い分け(suction_pad_top/suction_pad_side)と同じ2枚テクスチャ構成。
+function liquidPumpFaceColorAt(u, v) {
+  const bevel = edgeBevel(u, v, 0.09);
+  let [r, g, b] = [72, 84, 96];
+  if (bevel === 1) [r, g, b] = [r + 22, g + 22, b + 22];
+  else if (bevel === -1) [r, g, b] = [r - 18, g - 18, b - 18];
+
+  const nearCornerU = Math.abs(u - 0.14) < 0.035 || Math.abs(u - 0.86) < 0.035;
+  const nearCornerV = Math.abs(v - 0.14) < 0.035 || Math.abs(v - 0.86) < 0.035;
+  if (nearCornerU && nearCornerV) [r, g, b] = [22, 26, 32];
+
+  const dist = Math.hypot(u - 0.5, v - 0.5);
+  if (dist < 0.34 && dist > 0.26) [r, g, b] = [150, 170, 185]; // バルブの縁
+  if (dist < 0.22) [r, g, b] = [30, 40, 55]; // パイプの開口部(暗い穴)
+  if (dist < 0.1) [r, g, b] = [70, 130, 190]; // 中を流れる液体(水色)
+
+  const n = (hashNoise(u, v) - 0.5) * 6;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
+function liquidPumpSideColorAt(u, v) {
+  const bevel = edgeBevel(u, v, 0.09);
+  let [r, g, b] = [72, 84, 96];
+  if (bevel === 1) [r, g, b] = [r + 22, g + 22, b + 22];
+  else if (bevel === -1) [r, g, b] = [r - 18, g - 18, b - 18];
+
+  const nearCornerU = Math.abs(u - 0.14) < 0.035 || Math.abs(u - 0.86) < 0.035;
+  const nearCornerV = Math.abs(v - 0.14) < 0.035 || Math.abs(v - 0.86) < 0.035;
+  if (nearCornerU && nearCornerV) [r, g, b] = [22, 26, 32];
+
+  const n = (hashNoise(u, v) - 0.5) * 6;
+  return [clampByte(r + n), clampByte(g + n), clampByte(b + n), 255];
+}
+
 // インベントリ等で使う、正面から見た単純な2Dアイコン(ブロックの3Dモデル用テクスチャとは
 // 別ファイル)。手に持った時やクリエイティブインベントリの見た目はこちらが使われるように
 // 各ブロックのBP側で`minecraft:icon`として登録する。3Dモデル側のBox UVテクスチャ
@@ -560,6 +598,8 @@ writePng("RP/textures/blocks/auto_terminal.png", 32, autoTerminalColorAt);
 writePng("RP/textures/blocks/inventory_terminal.png", 32, inventoryTerminalColorAt);
 writePng("RP/textures/blocks/precision_terminal.png", 32, precisionTerminalColorAt);
 writePng("RP/textures/blocks/delivery_terminal.png", 32, deliveryTerminalColorAt);
+writePng("RP/textures/blocks/liquid_pump_face.png", 32, liquidPumpFaceColorAt);
+writePng("RP/textures/blocks/liquid_pump_side.png", 32, liquidPumpSideColorAt);
 writePng("RP/textures/blocks/network_observer.png", NETWORK_OBSERVER_CANVAS_SIZE, networkObserverColorAt);
 writePng("RP/textures/blocks/io_pad.png", 32, ioPadColorAt);
 writePng("RP/textures/blocks/suction_pad_top.png", 32, suctionPadTopColorAt);

@@ -17,5 +17,8 @@
   },
   "wh:suction_pad": {
     "sound": "stone"
+  },
+  "wh:liquid_pump": {
+    "sound": "metal"
   }
 }

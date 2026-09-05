@@ -87,6 +87,16 @@ const SUCTION_PAD_LORE: RawMessage[] = [
   ADDON_SIGNATURE_LINE,
 ];
 
+// 液体ポンプも搬入出パッド・吸い込みパッドと同じ理由(設定を持たず、設置面ではなく
+// その裏側の液体を対象にする)で専用の使い方説明を持つ。
+const LIQUID_PUMP_LORE: RawMessage[] = [
+  { translate: "item.wh:liquid_pump.desc.1" },
+  BLANK_LINE,
+  { translate: "item.wh:liquid_pump.desc.usage" },
+  BLANK_LINE,
+  ADDON_SIGNATURE_LINE,
+];
+
 // リモート配達ターミナルはブロックに設置しないアイテムなので、専用の使い方説明を持つ。
 const REMOTE_DELIVERY_TERMINAL_LORE: RawMessage[] = [
   { translate: "item.wh:remote_delivery_terminal.desc.1" },
@@ -186,6 +196,7 @@ const ITEM_DESCRIPTIONS: Record<string, RawMessage[] | (() => RawMessage[])> = {
   "wh:delivery_terminal": DELIVERY_TERMINAL_LORE,
   "wh:io_pad": IO_PAD_LORE,
   "wh:suction_pad": SUCTION_PAD_LORE,
+  "wh:liquid_pump": LIQUID_PUMP_LORE,
   "wh:network_observer": NETWORK_OBSERVER_LORE,
   "wh:speed_kit_tier1": () => buildSpeedKitLore(1),
   "wh:speed_kit_tier2": () => buildSpeedKitLore(2),

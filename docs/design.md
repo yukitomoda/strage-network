@@ -1140,3 +1140,67 @@ vanilla分(約1891件×2locale)+アドオン分を合わせても200KB弱で、e
 キットアイテム(`wh:remote_access_kit_tier1`〜`4`)は`range_kit_tier*.json`(BP)・lang・`itemDescriptions.ts`の`buildRangeKitLore`と全く同じ構成で複製した(値は`getRemoteAccessRangeForTier`から動的取得。T4は`Infinity`をそのまま表示せず「同一ディメンション内どこでも」に置き換える`formatRemoteAccessDistance`を用意した)。アイコンは`tools/generate-placeholder-icon.mjs`に速度(菱形)/周期(リング)/範囲(四角い枠)に続く4つ目の形として、中央の十字+外周4方向の短い目盛りからなる照準(レティクル)風の`upgradeKitCrossColorAt`を追加した。
 
 レシピはユーザー指定の「Cタイプ」(範囲軸と同じ進行シンボルの階段: 鉄→ダイヤモンド→ネザライトインゴット→ヘビーコア)と意味シンボル(T1: エンダーアイ/T2: 氷/T3: 雪玉/T4: リカバリーコンパス)を、4章「クラフトレシピ: アップグレードキット・コントローラ」記載のTierごとの固定パターンにそのまま当てはめて作成した(Tier1/2: `["A A","BCB","A A"]`、Tier3: `[" A ","ABA"," C "]`、Tier4: `["ABA","ACA","ADA"]`でA=Tier1の意味シンボル固定)。
+
+## 34. 「液体ポンプ」(`wh:liquid_pump`)を追加(ユーザー提案・調査を経て実装)
+
+ユーザーから「液体の輸送」機能の提案があり、まず技術調査を行った。(1) ワールドの水源/溶岩源ブロックは`Block.setType`によるブロック書き換えで、(2) 大釜に溜まった液体は専用の`BlockFluidContainerComponent`(`minecraft:fluid_container`、`fillLevel`/`getFluidType()`/`setFluidType()`を持つ)で、どちらもScript APIから直接操作できることを確認した。相談の結果、次の方針で実装した:
+
+- **対象ブロック**: フルブロックとして設置し(ユーザー要望。搬入出パッド・吸い込みパッドと同じ)、設置時にプレイヤーが向いていた方向(`minecraft:facing_direction`)が指す面の、その1マス先。バルブ柄のテクスチャが表示される面の奥にある液体を汲み出すイメージ(「ブロックの背後にある液体を対象にする」というユーザーの表現通り)。
+- **UXパターン**: 自動巡回型。吸い込みパッドと同様、設置してネットワークに接続するだけで毎サイクル自動的に動作し、設定は持たない。
+- **スコープ**: 水・溶岩のみ(ポーション/粉雪/染料入り大釜は対象外)。
+- **動作方向**: 汲み出しのみ。ネットワークの満タンバケツを消費して液体を戻す「注ぎ込み」は今回のスコープ外。
+- **バケツ消費**: ネットワーク内の空バケツ(`minecraft:bucket`)を1個消費して満タンバケツに変換する(サバイバルの実感に近づけるため。空バケツが無い間は汲み出しが起きず、プレイヤーが供給する必要がある)。
+
+### ブロック本体はフルブロック+向き付きテクスチャ
+
+`wh:liquid_pump`は当初、既存のターミナル系(`terminal.json`)と同じ「薄い板を壁に張り付ける」方式で試作したが、ユーザーから「フルブロックにしたい」との要望を受けて設計を変更した。搬入出パッド・吸い込みパッドと同じ`minecraft:geometry.full_block`を使い、代わりに`network_observer.json`と同じ`minecraft:placement_direction`トレイト(`enabled_states: ["minecraft:facing_direction"]`、設置時にプレイヤーが向いていた方向を6方向のブロックステートとして記録する)を採用した。
+
+`network_observer.json`はモデル自体を回転させて特定の面に別テクスチャを見せていたが、液体ポンプはフルブロック(`minecraft:geometry.full_block`)のままなので回転は不要で、より単純に**`minecraft:material_instances`をpermutationsで丸ごと差し替える**方式にした(搬入出パッド/吸い込みパッドが上面だけ別テクスチャにしている構成の、向き固定版ではなく向き可変版):
+
+```json
+{
+  "condition": "q.block_state('minecraft:facing_direction') == 'north'",
+  "components": {
+    "minecraft:material_instances": {
+      "*": { "texture": "wh:liquid_pump_side" },
+      "north": { "texture": "wh:liquid_pump_face" }
+    }
+  }
+}
+```
+(6方向分を用意。`wh:liquid_pump_face`がバルブ柄、`wh:liquid_pump_side`が無地の金属面。)
+
+- `liquidPumpCheck.ts`の`getTargetLiquidLocation`が`block.permutation.getAllStates()["minecraft:facing_direction"]`を読み、対応する方向ベクトル(`FACING_DIRECTION_VECTORS`)だけポンプの位置からずらして対象位置を求める。バルブ柄のテクスチャが向いている面の1マス先を汲み出す、という直感的な対応にした。
+- `wrench.ts`のリンク処理・`network.terminals`への登録は`terminalBlock.ts`の`isTerminalLikeBlock`に`LIQUID_PUMP_BLOCK_ID`を加えるだけで既存の枠組みにそのまま乗った(フルブロックなので`isThinTerminalBlock`には加えていない。搬入出パッド・吸い込みパッドと同じ扱い)。
+- フルブロックのため、搬入出パッド・吸い込みパッドと同様に専用のBP/items定義は不要(ブロックの識別子がそのままアイテムのtypeIdになる)。
+
+### レッドストーン入力による動作停止(ユーザー要望)
+
+14章「自動処理のレッドストーン制御」で確立した方式をそのまま適用した: `BP/blocks/liquid_pump.json`に`"minecraft:redstone_consumer": { "min_power": 0 }`を追加し(このコンポーネントは`format_version`/`min_engine_version`が1.26.0以上必要なため、`format_version`を1.26.0へ引き上げた。`io_pad.json`/`suction_pad.json`と同じ)、フルブロックであるポンプ自身の位置で通電を受ける。搬入出パッド・吸い込みパッドと同じくフルブロックのため、14章で薄い板系ターミナルが直面した「張り付いた先のブロックでは受信できない」という制約(`Block.getRedstonePower()`は普通のコンテナブロックでは値を持たない)自体が問題にならず、素直にブロック自身へ`redstone_consumer`を付けるだけで済んだ。
+
+`processNetworkLiquidPumps`(`liquidPumpCheck.ts`)のループに、既存の`isRedstoneLocked(block)`(`terminalBlock.ts`)チェックを追加し、通電中のポンプは`processLiquidPump`を呼ばずスキップするようにした。搬入出パッド・吸い込みパッドは`targetReconciliation.ts`のディスパッチループが一括でこのチェックを行っているが、液体ポンプは`targetReconciliation.ts`に乗らない独立処理(前述)のため、`processNetworkLiquidPumps`側で個別に同じチェックを行っている。
+
+### 液体の検出と変換(新規`liquidPumpCheck.ts`)
+
+`detectExtractableFluid(block)`が対象ブロックを判定する:
+
+- ワールドの水源/溶岩源ブロック: `block.permutation.getAllStates()["liquid_depth"] === 0`(ソースのみ。流れている水/溶岩はバニラのバケツと同じく対象外)。
+- 満タンの大釜: `block.getComponent("minecraft:fluid_container")`の`fillLevel === FluidContainer.maxFillLevel`(中途半端な水位は対象外)かつ`getFluidType()`が`Water`/`Lava`(ポーション/粉雪は対象外)。
+
+変換本体`processLiquidPump`は、まず対象の液体を判定 → `consumeFromStorages`(新規、後述)で空バケツを1個消費 → `insertItemStackIntoStorages`(吸い込みパッドと同じ既存関数)で満タンバケツの格納を試みる、という順序で処理する。**格納に失敗した場合(ネットワーク満杯)は、消費した空バケツを戻して中断し、ワールドの液体には一切手を付けない**。この順序(ワールドを書き換える前に、必ず先に格納の成否を確認する)を守ることで、ネットワーク満杯時に「バケツだけ消えて液体もアイテムも生成されない」というアイテム消失を防いでいる。
+
+**新規`consumeFromStorages`(`storageScan.ts`)**: 既存の`extractFromStorages`(ストレージから取り出して`destContainer`へ届ける関数)とほぼ同じループだが、届け先を持たずスロットの中身をそのまま減らす/削除するだけの版。「ネットワークから搬入先を必要とせず消費するだけ」という処理はこのアドオンで初めてだったため新設した。
+
+### スループット予算に乗せない独立処理
+
+引き出し・預け入れ・整理(25章「広告モデル」)は共有スループット予算・`targetReconciliation.ts`のディスパッチに乗っているが、液体ポンプは乗せていない。対象が固定1マスのため「1台につき1サイクル最大1個」という上限が自然に付き、他の目標系ターミナルのような共有予算制が無くても暴走しないと判断したためである。`networkProcessing.ts`の`startNetworkProcessingLoop`(既存の引き出し/預け入れ/整理と同じサイクル)に`processNetworkLiquidPumps`(`network.terminals`を`LIQUID_PUMP_BLOCK_ID`で絞り込み、各ポンプに`processLiquidPump`を1回ずつ試すだけ)を追加し、戻り値(いずれかのポンプが変換を行ったか)を既存の`ordersChanged || depositsChanged`と同様にネットワークオブザーバーの即時再計算トリガーに含めた。
+
+### 見た目
+
+`tools/generate-placeholder-icon.mjs`に、搬入出パッドの上面/側面(`suction_pad_top`/`suction_pad_side`)と同じ2枚テクスチャ構成で、`liquidPumpFaceColorAt`(バルブ/パイプの開口部、同心円、水色の穴)と`liquidPumpSideColorAt`(無地の金属パネル)を追加した。「液体を汲み出す機器である」ことと、どちらの面を対象の液体に向けて設置すればよいかが一目で分かるようにする狙い。
+
+### 今回のスコープ外(将来の課題)
+
+- **注ぎ込み方向**: ネットワークの満タンバケツを消費して液体をワールド/大釜に戻す動作は、waterloggedブロックとの整合や設置先の空き確認など検討事項が増えるため見送った。
+- **ポーション/粉雪/染料入り大釜**: アイテム側にNBT的な効果情報を持たせる必要があり、このアドオンの「アイテムはtypeId+個数だけ見る」という既存のスタック管理方針と相性が悪いため見送った。
+- **レシピ**: 未定。別途相談の上で追加する。

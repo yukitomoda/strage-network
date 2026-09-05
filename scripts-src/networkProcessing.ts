@@ -2,6 +2,7 @@ import { Dimension, system, world } from "@minecraft/server";
 import { CONTROLLER_CYCLE_AXIS } from "./controllerAxes";
 import { getControllerEnabled } from "./controllerSettings";
 import { processNetworkDeposits } from "./depositProcessing";
+import { processNetworkLiquidPumps } from "./liquidPumpCheck";
 import { getAllNetworks } from "./network";
 import { recalculateNetworkObservers } from "./networkObserverProcessing";
 import { processNetworkOrders } from "./orderProcessing";
@@ -60,16 +61,20 @@ export function startCycleAlignedLoop(callback: (network: NetworkData, dimension
 
 // 引き出し・預け入れ・整理を同じサイクルで処理する。それぞれ独立したスループット・
 // キューを持つため、いずれかが詰まっても他には影響しない。docs/design.md 4章参照。
+// 液体ポンプ(液体の輸送、docs/design.md参照)も同じサイクルに乗せるが、目標系ターミナルの
+// 「広告モデル」(25章、targetReconciliation.ts)とは違う独立処理のため、共有スループット
+// 予算には加わらない(1台につき1サイクル最大1個という上限が対象の固定1マスから自然に付く)。
 export function startNetworkProcessingLoop(): void {
   startCycleAlignedLoop((network, dimension) => {
     const ordersChanged = processNetworkOrders(network);
     const depositsChanged = processNetworkDeposits(network);
     processNetworkOrganize(network);
+    const pumpsChanged = processNetworkLiquidPumps(dimension, network);
 
     // ネットワークオブザーバー(docs/design.md参照): コントローラによる引き出し/預け入れで
     // 実際にアイテムが動いた場合は直ちに再計算し、周期カウンタもリセットする。動きが無くても、
     // プレイヤーによる手動でのストレージ出し入れを反映するため5サイクルごとに再計算する。
-    if (ordersChanged || depositsChanged) {
+    if (ordersChanged || depositsChanged || pumpsChanged) {
       recalculateNetworkObservers(dimension, network);
       cyclesSinceObserverRecalc.set(network.id, 0);
     } else {
