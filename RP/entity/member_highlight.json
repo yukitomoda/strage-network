@@ -3,7 +3,7 @@
   "minecraft:client_entity": {
     "description": {
       "identifier": "wh:member_highlight",
-      "materials": { "default": "entity_alphablend" },
+      "materials": { "default": "entity_alphablend", "mark": "entity_alphatest" },
       "textures": {
         "default": "textures/entity/member_highlight",
         "drain": "textures/entity/member_highlight_drain"

@@ -8,7 +8,21 @@
         }
       },
       "geometry": "Geometry.default",
-      "materials": [{ "*": "Material.default" }],
+      "materials": [
+        { "*": "Material.default" },
+        { "mark_n": "Material.mark" },
+        { "mark_s": "Material.mark" },
+        { "mark_e": "Material.mark" },
+        { "mark_w": "Material.mark" },
+        { "mark_u": "Material.mark" },
+        { "mark_d": "Material.mark" },
+        { "mark_thin_north": "Material.mark" },
+        { "mark_thin_south": "Material.mark" },
+        { "mark_thin_east": "Material.mark" },
+        { "mark_thin_west": "Material.mark" },
+        { "mark_thin_up": "Material.mark" },
+        { "mark_thin_down": "Material.mark" }
+      ],
       "textures": ["array.wh_member_highlight_colors[q.property('wh:drain')]"],
       "part_visibility": [
         { "*": false },
@@ -24,12 +38,24 @@
         { "bottom_s": "!q.property('wh:is_thin') && q.property('wh:visible_bottom_s')" },
         { "bottom_w": "!q.property('wh:is_thin') && q.property('wh:visible_bottom_w')" },
         { "bottom_e": "!q.property('wh:is_thin') && q.property('wh:visible_bottom_e')" },
+        { "mark_n": "!q.property('wh:is_thin') && q.property('wh:visible_mark_n')" },
+        { "mark_s": "!q.property('wh:is_thin') && q.property('wh:visible_mark_s')" },
+        { "mark_e": "!q.property('wh:is_thin') && q.property('wh:visible_mark_e')" },
+        { "mark_w": "!q.property('wh:is_thin') && q.property('wh:visible_mark_w')" },
+        { "mark_u": "!q.property('wh:is_thin') && q.property('wh:visible_mark_u')" },
+        { "mark_d": "!q.property('wh:is_thin') && q.property('wh:visible_mark_d')" },
         { "thin_north": "q.property('wh:is_thin') && q.property('wh:facing') == 'north'" },
         { "thin_south": "q.property('wh:is_thin') && q.property('wh:facing') == 'south'" },
         { "thin_east": "q.property('wh:is_thin') && q.property('wh:facing') == 'east'" },
         { "thin_west": "q.property('wh:is_thin') && q.property('wh:facing') == 'west'" },
         { "thin_up": "q.property('wh:is_thin') && q.property('wh:facing') == 'up'" },
-        { "thin_down": "q.property('wh:is_thin') && q.property('wh:facing') == 'down'" }
+        { "thin_down": "q.property('wh:is_thin') && q.property('wh:facing') == 'down'" },
+        { "mark_thin_north": "q.property('wh:is_thin') && q.property('wh:facing') == 'north'" },
+        { "mark_thin_south": "q.property('wh:is_thin') && q.property('wh:facing') == 'south'" },
+        { "mark_thin_east": "q.property('wh:is_thin') && q.property('wh:facing') == 'east'" },
+        { "mark_thin_west": "q.property('wh:is_thin') && q.property('wh:facing') == 'west'" },
+        { "mark_thin_up": "q.property('wh:is_thin') && q.property('wh:facing') == 'up'" },
+        { "mark_thin_down": "q.property('wh:is_thin') && q.property('wh:facing') == 'down'" }
       ]
     }
   }

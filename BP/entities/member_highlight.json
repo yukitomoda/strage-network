@@ -20,6 +20,12 @@
         "wh:visible_bottom_s": { "type": "bool", "default": false, "client_sync": true },
         "wh:visible_bottom_w": { "type": "bool", "default": false, "client_sync": true },
         "wh:visible_bottom_e": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_mark_n": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_mark_s": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_mark_e": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_mark_w": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_mark_u": { "type": "bool", "default": false, "client_sync": true },
+        "wh:visible_mark_d": { "type": "bool", "default": false, "client_sync": true },
         "wh:is_thin": { "type": "bool", "default": false, "client_sync": true },
         "wh:facing": {
           "type": "enum",

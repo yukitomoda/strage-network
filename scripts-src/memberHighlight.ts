@@ -78,19 +78,36 @@ function computeEdgeProperties(loc: Vector3, isMember: (l: Vector3) => boolean):
   const u = !has(0, 1, 0);
   const d = !has(0, -1, 0);
 
+  // ユーザー報告により判明: フルブロック用のジオメトリ(RP/models/entity/member_highlight.geo.json)
+  // では、なぜか"_n"系ボーンが実際には南側に、"_s"系ボーンが実際には北側に描画される
+  // (31章の薄い板系ハイライトで見つかったのと同種の、南北軸だけの食い違い。東西軸は
+  // 影響が無い)。孤立したブロックでは南北どちらの辺も表示されるため症状が出ず、二連チェスト
+  // のように片側(南または北)だけ隣接している場合に限って、外側にあるべき辺が消え、
+  // 内側(継ぎ目)に本来隠れるはずの辺が表示される、という形で発覚した。理論的な原因の
+  // 深追いはせず(31章と同じ方針)、_nキーに実際の南判定を、_sキーに実際の北判定を
+  // 割り当てることで実機の見え方に合わせている。
   return {
-    "wh:visible_vert_en": edgeVisible(n, e, has(1, 0, -1)),
-    "wh:visible_vert_wn": edgeVisible(n, w, has(-1, 0, -1)),
-    "wh:visible_vert_es": edgeVisible(s, e, has(1, 0, 1)),
-    "wh:visible_vert_ws": edgeVisible(s, w, has(-1, 0, 1)),
-    "wh:visible_bottom_n": edgeVisible(n, d, has(0, -1, -1)),
-    "wh:visible_top_n": edgeVisible(n, u, has(0, 1, -1)),
-    "wh:visible_bottom_s": edgeVisible(s, d, has(0, -1, 1)),
-    "wh:visible_top_s": edgeVisible(s, u, has(0, 1, 1)),
+    "wh:visible_vert_en": edgeVisible(s, e, has(1, 0, 1)),
+    "wh:visible_vert_wn": edgeVisible(s, w, has(-1, 0, 1)),
+    "wh:visible_vert_es": edgeVisible(n, e, has(1, 0, -1)),
+    "wh:visible_vert_ws": edgeVisible(n, w, has(-1, 0, -1)),
+    "wh:visible_bottom_n": edgeVisible(s, d, has(0, -1, 1)),
+    "wh:visible_top_n": edgeVisible(s, u, has(0, 1, 1)),
+    "wh:visible_bottom_s": edgeVisible(n, d, has(0, -1, -1)),
+    "wh:visible_top_s": edgeVisible(n, u, has(0, 1, -1)),
     "wh:visible_bottom_e": edgeVisible(e, d, has(1, -1, 0)),
     "wh:visible_bottom_w": edgeVisible(w, d, has(-1, -1, 0)),
     "wh:visible_top_e": edgeVisible(e, u, has(1, 1, 0)),
     "wh:visible_top_w": edgeVisible(w, u, has(-1, 1, 0)),
+    // 面マーク(ユーザー要望「強調表示されているブロックが分かりやすいように」)。辺と違い
+    // 対角判定は不要で、その方向が単純に空いている(=隣に強調対象が無い、その面が露出している)
+    // かどうかだけで表示可否が決まる。南北の入れ替えは辺と同じ理由。
+    "wh:visible_mark_n": s,
+    "wh:visible_mark_s": n,
+    "wh:visible_mark_e": e,
+    "wh:visible_mark_w": w,
+    "wh:visible_mark_u": u,
+    "wh:visible_mark_d": d,
   };
 }
 
@@ -157,7 +174,23 @@ export function syncMemberHighlight(dimension: Dimension, network: NetworkData, 
 
   const points = collectPoints(network, dimension, mode);
   const memberKeys = new Set(points.map((p) => key(p.loc)));
-  const isMember = (l: Vector3) => memberKeys.has(key(l));
+
+  // 薄い板系(ターミナル)はブロックの一部の面しか占有しないため、フルブロックの辺の
+  // 隣接判定では「埋まっている」とみなしてはいけない(ユーザー指摘: フルブロックの隣が
+  // ターミナルだと、そちら側の辺が継ぎ目と誤認識されて消えてしまっていた)。薄い板系の
+  // 位置をあらかじめ調べておき、フルブロックの辺の可視判定にはそれを除いた集合を渡す
+  // (薄い板系自身の表示はcomputeEdgeProperties自体を使わないため、この除外の影響を受けない)。
+  const isThinAt = new Map<string, boolean>();
+  for (const point of points) {
+    const k = key(point.loc);
+    if (isThinAt.has(k)) continue;
+    const block = dimension.getBlock(point.loc);
+    isThinAt.set(k, !!block && isThinTerminalBlock(block.typeId));
+  }
+  const isMemberForEdges = (l: Vector3) => {
+    const k = key(l);
+    return memberKeys.has(k) && !isThinAt.get(k);
+  };
 
   const existingByKey = new Map<string, Entity>();
   for (const entity of existing) {
@@ -183,13 +216,13 @@ export function syncMemberHighlight(dimension: Dimension, network: NetworkData, 
       entity.setDynamicProperty(OWNER_LOCATION_PROPERTY, JSON.stringify(point.loc));
     }
     entity.setProperty("wh:drain", point.drain);
-    const block = dimension.getBlock(point.loc);
-    const isThin = !!block && isThinTerminalBlock(block.typeId);
+    const isThin = isThinAt.get(k) ?? false;
     entity.setProperty("wh:is_thin", isThin);
     if (isThin) {
+      const block = dimension.getBlock(point.loc);
       entity.setProperty("wh:facing", highlightFacing(getBlockFacing(block!)));
     } else {
-      const edgeProps = computeEdgeProperties(point.loc, isMember);
+      const edgeProps = computeEdgeProperties(point.loc, isMemberForEdges);
       for (const [propertyId, visible] of Object.entries(edgeProps)) {
         entity.setProperty(propertyId, visible);
       }
