@@ -1,0 +1,18 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "wh:liquid_pump"
+    },
+    "tags": ["crafting_table"],
+    "key": {
+      "A": { "item": "minecraft:bucket" },
+      "B": { "item": "minecraft:glass" },
+      "C": { "item": "wh:auto_terminal" },
+      "D": { "item": "minecraft:cauldron" }
+    },
+    "pattern": [" A ", "BCB", " D "],
+    "result": { "item": "wh:liquid_pump" },
+    "unlock": [{ "item": "wh:auto_terminal" }]
+  }
+}
