@@ -43,6 +43,23 @@ export function scanCatalog(dimension: Dimension, network: NetworkData): Catalog
   return scanContainers(networkStorageContainers(dimension, network));
 }
 
+// コントローラUIの「状況」タブ表示用(ユーザー要望): ネットワーク内の全ストレージを
+// 合算した「使用スロット数/全体スロット数」。空きスロットが無いストレージから溢れた
+// アイテムがドロップしてしまう、といった状況にプレイヤーが気づく手がかりになる。
+export type StorageSlotUsage = { used: number; total: number };
+
+export function getStorageSlotUsage(dimension: Dimension, network: NetworkData): StorageSlotUsage {
+  let used = 0;
+  let total = 0;
+  for (const container of networkStorageContainers(dimension, network)) {
+    total += container.size;
+    for (let i = 0; i < container.size; i++) {
+      if (container.getItem(i)) used++;
+    }
+  }
+  return { used, total };
+}
+
 // 預け入れUIのカタログ(=ターミナルの張り付いた先のコンテナの中身)。
 export function scanContainerCatalog(container: Container): CatalogEntry[] {
   return scanContainers([container]);

@@ -1,4 +1,4 @@
-import { Block, Player, system } from "@minecraft/server";
+import { Block, Dimension, Player, system } from "@minecraft/server";
 import { CustomForm, ObservableBoolean, ObservableNumber, ObservableString } from "@minecraft/server-ui";
 import {
   CONTROLLER_AXES,
@@ -22,8 +22,14 @@ import { findNetworkByController } from "./network";
 import { getCycleIntervalTicks } from "./networkProcessing";
 import { getOrderThroughput, listActiveOrders } from "./orderProcessing";
 import { getOrganizeThroughput, listActiveOrganize, submitOrganize } from "./organizeProcessing";
-import { scanCatalog } from "./storageScan";
-import { setupDepositStatusSection, setupOrderStatusSection, setupOrganizeStatusSection } from "./statusListUi";
+import { NetworkData } from "./state";
+import { getStorageSlotUsage, scanCatalog } from "./storageScan";
+import {
+  setupDepositStatusSection,
+  setupOrderStatusSection,
+  setupOrganizeStatusSection,
+  STATUS_REFRESH_INTERVAL_TICKS,
+} from "./statusListUi";
 import { getAxisMaxTier, getAxisTier, giveOrDropKits, setAxisTier, UpgradeAxis } from "./upgrade";
 
 // 各処理の「スループット」は処理ループ1回(サイクル)あたりの予算であり、サーバーtick単位の
@@ -40,6 +46,11 @@ function cycleIntervalLabel(cycleTicks: number): string {
 
 function formatAxisTierLabel(axis: UpgradeAxis, tier: number): string {
   return `${axis.label} Tier ${tier} / ${getAxisMaxTier(axis)}`;
+}
+
+function slotUsageLabel(dimension: Dimension, network: NetworkData): string {
+  const { used, total } = getStorageSlotUsage(dimension, network);
+  return `ストレージ： §7${used}/${total} スロット`;
 }
 
 // 素手(レンチ以外)でコントローラを右クリックした時のUI。「状況」「整理」「アップグレード」
@@ -102,6 +113,17 @@ export function showControllerUi(player: Player, block: Block): void {
   // コントローラの「状況」タブはネットワーク全体が対象(ターミナルUIの「状況」タブは
   // その端末に絞り込む。statusListUi.ts参照)。現在のスループット/周期は「アップグレード」
   // タブへ移動した(各軸のTier表示の下にまとめて表示する。後述)。
+  //
+  // ストレージの使用スロット数(ユーザー要望): 空きスロットが無いストレージから溢れた
+  // アイテムがドロップしてしまう、といった状況に気づく手がかりとして先頭に表示する。
+  // 他の状況セクションと同じSTATUS_REFRESH_INTERVAL_TICKS間隔で自動更新する。
+  const slotUsage = new ObservableString(slotUsageLabel(dimension, network));
+  form.label(slotUsage, { visible: isStatusTab });
+  const slotUsageRefreshTimer = system.runInterval(() => {
+    slotUsage.setData(slotUsageLabel(dimension, network));
+  }, STATUS_REFRESH_INTERVAL_TICKS);
+  form.divider({ visible: isStatusTab });
+
   form.label('引き出し', { visible: isStatusTab });
   const orderStatusRefreshTimer = setupOrderStatusSection(
     form,
@@ -235,6 +257,7 @@ export function showControllerUi(player: Player, block: Block): void {
     .show()
     .catch((e) => console.error(e))
     .finally(() => {
+      system.clearRun(slotUsageRefreshTimer);
       system.clearRun(orderStatusRefreshTimer);
       system.clearRun(depositStatusRefreshTimer);
       system.clearRun(organizeStatusRefreshTimer);
