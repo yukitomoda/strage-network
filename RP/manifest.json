@@ -2,7 +2,7 @@
   "format_version": 2,
   "header": {
     "name": "Storage Network (Dev) - Resource Pack",
-    "description": "個人利用向けの倉庫(ストレージネットワーク)アドオン (リソースパック)",
+    "description": "個人利用向けの倉庫(ストレージネットワーク)アドオン (リソースパック) v0.8.3",
     "uuid": "d75168b3-89a2-49cf-ba6e-bcbc9d5a16ae",
     "version": [0, 8, 3],
     "min_engine_version": [1, 26, 0]

@@ -21,6 +21,26 @@ function writeVersion(path, [major, minor, patch]) {
   writeFileSync(path, replaced);
 }
 
+// アドオンの説明文にもバージョンを含めたい(ユーザー要望)。説明文末尾の" vX.Y.Z"だけを
+// 対象にした正規表現のその場書き換えにすることで、初回(まだ付いていない)・2回目以降
+// (前のバージョンが付いている)のどちらでも同じ処理で済む。manifest.json側は
+// "description": "..."の形、lang側はpack.description=...の形と構文が違うため別々の
+// 関数にしている。
+const MANIFEST_DESCRIPTION_PATTERN = /("description": ")([^"]*?)(?: v\d+\.\d+\.\d+)?(")/;
+const LANG_DESCRIPTION_PATTERN = /^(pack\.description=.*?)(?: v\d+\.\d+\.\d+)?$/m;
+
+function writeManifestDescription(path, versionString) {
+  const text = readFileSync(path, "utf8");
+  const replaced = text.replace(MANIFEST_DESCRIPTION_PATTERN, `$1$2 v${versionString}$3`);
+  writeFileSync(path, replaced);
+}
+
+function writeLangDescription(path, versionString) {
+  const text = readFileSync(path, "utf8");
+  const replaced = text.replace(LANG_DESCRIPTION_PATTERN, `$1 v${versionString}`);
+  writeFileSync(path, replaced);
+}
+
 const [major, minor, patch] = currentVersion("BP/manifest.json");
 const newVersion = [major, minor, patch + 1];
 
@@ -28,6 +48,12 @@ writeVersion("BP/manifest.json", newVersion);
 writeVersion("RP/manifest.json", newVersion);
 
 const versionString = newVersion.join(".");
+
+writeManifestDescription("BP/manifest.json", versionString);
+writeManifestDescription("RP/manifest.json", versionString);
+writeLangDescription("RP/texts/ja_JP.lang", versionString);
+writeLangDescription("RP/texts/en_US.lang", versionString);
+
 console.log(`version bumped to ${versionString}`);
 
 if (process.env.GITHUB_OUTPUT) {

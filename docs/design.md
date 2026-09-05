@@ -1337,3 +1337,15 @@ const HIGHLIGHT_FACING_MAP: Record<string, ThinFacing> = {
 ### 修正
 
 `syncMemberHighlight`で、ハイライト対象の各位置があらかじめ薄い板系かどうかを調べておき(`isThinAt`)、フルブロックの辺の可視判定に渡す`isMember`相当の関数(`isMemberForEdges`)では**薄い板系の位置を「空いている」扱いにする**(`memberKeys.has(k) && !isThinAt.get(k)`)よう変更した。薄い板系自身の表示(`thin_north`等のボーン選択)は`computeEdgeProperties`を使わないロジックのため、この変更の影響を受けない。二連チェストの継ぎ目を隠す既存の挙動(隣接するのがフルブロック同士の場合)は変わらない。
+
+## 41. アドオンの説明文にバージョンを含める(ユーザー要望)
+
+パックの説明文(Minecraft本体の「マイパック」画面で表示される)に、そのビルドのバージョン番号を表示してほしいという要望があった。表示元は2箇所ある: `BP/manifest.json`/`RP/manifest.json`の`header.description`(lang未読み込み時のフォールバック)と、`RP/texts/ja_JP.lang`/`en_US.lang`の`pack.description`(Bedrockの標準的な仕組みで、パックにこのキーがあれば実際の表示はこちらが優先される。BPには`texts`フォルダ自体が無いため、BP側はmanifestのdescriptionがそのまま使われる)。両方の末尾に` vX.Y.Z`を追記する形にした。
+
+### CIの自動バージョン採番(`tools/bump-version.mjs`)にも同期させる
+
+`.github/workflows/release.yml`がpushのたびにpatchバージョンを自動的に+1しているため(12章参照のCIパイプライン)、説明文中のバージョン表記もこの自動採番に追従させないと、次のリリースで即座に古い表記のまま取り残されてしまう。`tools/bump-version.mjs`に、説明文末尾の` vX.Y.Z`部分だけを対象にした正規表現置換を追加した:
+
+- `MANIFEST_DESCRIPTION_PATTERN`(`"description": "..."`の形)と`LANG_DESCRIPTION_PATTERN`(`pack.description=...`の形)の2種類(構文が違うため別関数)。
+- どちらも「末尾の` vX.Y.Z`は省略可能」という正規表現にしてあるため、**初回(まだバージョン表記が無い)でも2回目以降(前のバージョンが付いている)でも同じ処理で正しく置き換わる**(既存のバージョン表記が累積して残ることはない)。
+- ワークフロー側の`git add`にも`RP/texts/ja_JP.lang`/`RP/texts/en_US.lang`を追加し、コミット対象に含めた。
