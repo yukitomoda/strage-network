@@ -28,7 +28,7 @@ item.wh:remote_access_kit_tier2=T2 リモート操作キット
 item.wh:remote_access_kit_tier3=T3 リモート操作キット
 item.wh:remote_access_kit_tier4=T4 リモート操作キット
 pack.name=Storage Network - リソースパック
-pack.description=個人利用向けの倉庫(ストレージネットワーク)アドオン v0.8.5
+pack.description=個人利用向けの倉庫(ストレージネットワーク)アドオン v0.8.6
 
 wh.addon_name=Storage Network
 
