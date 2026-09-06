@@ -1376,3 +1376,21 @@ const ry = (dx + dy) * Math.SQRT1_2;
 ```
 
 に入れ替え、`RP/textures/items/wrench.png`を再生成した。ASCIIアートでのシミュレーションで、修正後は柄尻が左下・スパナの口が右上に来ることを確認済み(実機での見た目そのものは未確認のため、確認をお願いする)。
+
+## 43. リモート配達ターミナルに「預け入れ」タブを追加(ユーザー要望)
+
+リモート配達ターミナルは「引き出し」しか持っておらず、預け入れができなかった。追加にあたり、どのようなUIにすべきかをまず相談した。
+
+### 検討: 通常のターミナルの預け入れ方式は使えない
+
+通常のターミナルの「預け入れ」タブは、選択UIすら無く**「張り付いた先のコンテナの中身を全部まとめて預け入れる」ワンボタン方式**(`terminalUi.ts`の`setupDepositTab`)。これは「そのコンテナに物を置く」という物理的な行為自体が既に「預けたい物の選別」になっているため成立する。リモート配達ターミナルには対応する専用の受け皿(張り付いた先のコンテナ)が無いため、**預け入れ元を「プレイヤーの現在の持ち物」にする**のが自然だが、持ち物には防具やツールなど「預けたくない物」も混ざっているため、同じワンボタン全預け入れ方式は危険(装備を丸ごと失いかねない)。
+
+代わりに、**引き出しタブと全く同じカート形式のUI(`terminalUi.ts`の`setupTab`、検索+個数指定+確定)を、方向を逆にして流用する**方針にした。カタログには、ネットワークの在庫ではなく`scanContainerCatalog`(どんな`Container`にも使える汎用関数、通常はコンテナに対して使うが、プレイヤーのインベントリもただの`Container`なのでそのまま渡せる)でスキャンしたプレイヤー自身の持ち物を使う。
+
+### 実装
+
+- **`state.ts`**: `DepositRequest`に`Order.remote`と全く同じ形の`remote?: { notifyOnComplete: boolean; terminalName?: string }`を追加した。
+- **`depositProcessing.ts`**: `submitDeposit`に`remote`引数を追加。`processNetworkDeposits`の搬入元解決を、`orderProcessing.ts`の`order.remote`分岐と全く同じ構造で`request.remote`により分岐させた: リモートの場合は`network.terminals`登録チェック・`dimension.getBlock`・張り付いた先の解決を全てスキップし、預け入れたプレイヤーがオンラインならそのインベントリを直接ソースにする。オンラインでない場合は`sourceContainer`を`undefined`のままにし、既存の「搬入元が無い→`finalizeDeposit`で不足確定」という安全なフォールバック経路にそのまま合流させる(ネットワーク在庫は一切増えないためアイテム消失のリスクは無い、引き出し側と対称)。
+- **`remoteDeliveryTerminalUi.ts`**: `setupRemoteDepositTab`を新設し、`setupTab`をプレイヤーの持ち物カタログで呼び出す。タブ構成を「引き出し」「状況」「設定」の3タブから、通常のターミナルと同じ並びの「引き出し」「預け入れ」「状況」「設定」の4タブへ変更した。状況タブにも預け入れの進行中一覧(`setupDepositStatusSection`、`request.remote !== undefined && playerName一致`で絞り込み)を追加した。
+- 預け入れには元々(通常のターミナルも含めて)完了通知の仕組みが無いため、リモート預け入れにも通知は追加していない(引き出し側の`order.remote.notifyOnComplete`のような非対称が生じるが、既存の設計方針をそのまま踏襲した)。
+- アイテムの説明文(`item.wh:remote_delivery_terminal.desc.1`)も、引き出しだけでなく預け入れにも対応したことが分かるよう更新した。

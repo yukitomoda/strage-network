@@ -69,8 +69,10 @@ export type DepositRequest = {
   id: string; // 厳密な一意ID(generateId()。キャンセル指定に使う、表示には使わない)
   displayId: string; // 表示用ID(generateDepositId()。Order.idと同じ、厳密な一意性は不要)
   playerName: string; // 実行者(Order.playerNameと同じ考え方。自動預け入れの場合は空文字列)
-  terminal: Vector3;
+  terminal: Vector3; // リモート配達ターミナル由来の場合はコントローラの座標(Order.terminalと同じ)
   lines: DepositLine[];
+  // リモート配達ターミナル(アイテム)由来の預け入れであることの印。Order.remoteと同じ理由・同じ形。
+  remote?: { notifyOnComplete: boolean; terminalName?: string };
 };
 
 export type DepositIssuingEntry = {

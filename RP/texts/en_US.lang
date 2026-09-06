@@ -65,7 +65,7 @@ item.wh:liquid_pump.desc.1=§7§oA pump that draws liquid from the water/lava so
 item.wh:liquid_pump.desc.usage=§7Just connect it to a network to use it (no configuration needed). Requires empty buckets in stock to draw liquid.
 item.wh:terminal_family.desc.usage=§7Place it on a storage and connect it to a network to use it.
 
-item.wh:remote_delivery_terminal.desc.1=§7§oA terminal that, once linked to a controller, lets you withdraw items just like a delivery terminal from a distance.
+item.wh:remote_delivery_terminal.desc.1=§7§oA terminal that, once linked to a controller, lets you withdraw items just like a delivery terminal from a distance, and deposit items from your own inventory into the network.
 item.wh:remote_delivery_terminal.desc.usage=§7Use it on a controller to link it, then use it in the air near the controller (up to 32 blocks without upgrades).
 
 item.wh:network_observer.desc.1=§7§oOutputs a redstone signal based on the network's item counts.

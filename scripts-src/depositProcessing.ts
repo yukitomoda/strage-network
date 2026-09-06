@@ -37,13 +37,21 @@ export function getDepositThroughput(tier: number): number {
 const DEPOSIT_ISSUE_DELAY_TICKS = 0;
 
 // 戻り値のdisplayIdはプレイヤーへの表示用(submitOrderのidと同じ役割)。
-export function submitDeposit(networkId: string, terminalLoc: Vector3, playerName: string, lines: DepositLine[]): string {
+// remote: リモート配達ターミナル(アイテム)由来の預け入れの場合だけ渡す(state.tsのDepositRequest.remote参照)。
+export function submitDeposit(
+  networkId: string,
+  terminalLoc: Vector3,
+  playerName: string,
+  lines: DepositLine[],
+  remote?: DepositRequest["remote"]
+): string {
   const request: DepositRequest = {
     id: generateId(),
     displayId: generateDepositId(),
     playerName,
     terminal: terminalLoc,
     lines,
+    remote,
   };
   const entries = getDepositIssuing(networkId);
   entries.push({ request, readyAtTick: system.currentTick + DEPOSIT_ISSUE_DELAY_TICKS });
@@ -113,27 +121,40 @@ export function processNetworkDeposits(network: NetworkData): boolean {
         continue;
       }
 
-      // network.terminals(登録データ)を正とする。理由はorderProcessing.tsの同様の箇所を参照。
-      const stillRegistered = network.terminals.some((t) => locEquals(t, request.terminal));
-      if (!stillRegistered) {
-        finalizeDeposit(network.id, request);
-        requests = requests.slice(1);
-        setDeposits(network.id, requests);
-        continue;
+      let sourceContainer;
+
+      if (request.remote) {
+        // リモート配達ターミナル(アイテム)由来: orderProcessing.tsのorder.remoteと同じ考え方で、
+        // 実在するブロックを一切参照しない。預け入れたプレイヤーがオンラインならインベントリから
+        // 優先的に取り出す。オフラインなら張り付いた先のような代替の搬入元が無いため
+        // sourceContainerはundefinedのままにし、下の「搬入元が無い」フォールバックへ合流させる
+        // (ネットワーク在庫は一切増えないため消失リスクは無い)。
+        const depositingPlayer = world.getPlayers().find((p) => p.name === request.playerName);
+        sourceContainer = depositingPlayer?.getComponent("inventory")?.container;
+      } else {
+        // network.terminals(登録データ)を正とする。理由はorderProcessing.tsの同様の箇所を参照。
+        const stillRegistered = network.terminals.some((t) => locEquals(t, request.terminal));
+        if (!stillRegistered) {
+          finalizeDeposit(network.id, request);
+          requests = requests.slice(1);
+          setDeposits(network.id, requests);
+          continue;
+        }
+
+        const terminalBlock = dimension.getBlock(request.terminal);
+        if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
+          // 登録はあるが今はブロックを取得できない(チャンク未読み込み等)。次tickに再試行する。
+          break;
+        }
+
+        // 預け入れ元はターミナルが張り付いている面(引き出しの搬入先と同じ場所)。毎回動的に見る。
+        // (搬入出パッドは25章の広告モデルへ移行済みでFIFOキュー(=ここ)に乗ることは無い。
+        // 張り付いた先という概念が無いパッド専用の分岐は不要になったため削除した。)
+        sourceContainer = dimension
+          .getBlock(getAttachedStorageLocation(terminalBlock))
+          ?.getComponent("inventory")?.container;
       }
 
-      const terminalBlock = dimension.getBlock(request.terminal);
-      if (!terminalBlock?.isValid || !isTerminalLikeBlock(terminalBlock.typeId)) {
-        // 登録はあるが今はブロックを取得できない(チャンク未読み込み等)。次tickに再試行する。
-        break;
-      }
-
-      // 預け入れ元はターミナルが張り付いている面(引き出しの搬入先と同じ場所)。毎回動的に見る。
-      // (搬入出パッドは25章の広告モデルへ移行済みでFIFOキュー(=ここ)に乗ることは無い。
-      // 張り付いた先という概念が無いパッド専用の分岐は不要になったため削除した。)
-      const sourceContainer = dimension
-        .getBlock(getAttachedStorageLocation(terminalBlock))
-        ?.getComponent("inventory")?.container;
       if (!sourceContainer) {
         finalizeDeposit(network.id, request);
         requests = requests.slice(1);
