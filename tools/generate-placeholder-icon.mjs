@@ -503,8 +503,13 @@ function wrenchColorAt(u, v) {
   const dx = u - 0.5;
   const dy = v - 0.5;
   // 柄が左下から右上に伸びるよう45度回転させた座標系(rx=柄方向、ry=柄の幅方向)。
-  const rx = (dx + dy) * Math.SQRT1_2;
-  const ry = (dy - dx) * Math.SQRT1_2;
+  // vはテクスチャ座標で下方向が正のため、左下(u小,v大)→右上(u大,v小)の向きに沿って
+  // 値が変化するのは(dx - dy)であり、(dx + dy)はその向きに沿って一定(=直交方向)になる。
+  // 以前はこの2つを取り違えており(rxとryが実質入れ替わっていた)、柄が実際には左上から
+  // 右下に伸びる向きで描画されてしまっていた(プレイヤーが手に持った時に不自然に見える、
+  // ユーザー指摘で発覚)。
+  const rx = (dx - dy) * Math.SQRT1_2;
+  const ry = (dx + dy) * Math.SQRT1_2;
 
   const bright = [200, 200, 210, 255];
   const shade = [130, 130, 145, 255];
